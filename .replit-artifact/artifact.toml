@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "NotebookForge"
+description = "A fully client-side Jupyter Notebook (.ipynb) to Word (.docx) converter. Users drag-and-drop or select a .ipynb file, configure document title, header and footer fields, preview the formatted output live, then download a .docx file — all in-browser with no backend, no login, no storage."
+version = "1.0.0"
+id = "artifacts/notebookforge"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25813
+
+[services.development]
+run = "pnpm --filter @workspace/notebookforge run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/notebookforge", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/notebookforge/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25813"
+BASE_PATH = "/"
