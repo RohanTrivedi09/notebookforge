@@ -6,6 +6,7 @@ import { Route, Switch, Router as WouterRouter } from 'wouter';
 import { Shell } from '@/components/layout/Shell';
 import Home from '@/pages/Home';
 import About from '@/pages/About';
+import PdfToMarkdown from '@/pages/PdfToMarkdown';
 
 const queryClient = new QueryClient();
 
@@ -15,6 +16,7 @@ function Router() {
       <Switch>
         <Route path="/" component={Home} />
         <Route path="/about" component={About} />
+        <Route path="/pdf-to-markdown" component={PdfToMarkdown} />
         <Route component={NotFound} />
       </Switch>
     </Shell>

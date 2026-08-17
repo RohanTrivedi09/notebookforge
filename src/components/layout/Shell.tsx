@@ -1,9 +1,12 @@
 import { Link, useLocation } from "wouter";
-import { BookText, Github, Linkedin, Mail } from "lucide-react";
+import { BookText, Github, Linkedin, Mail, Settings, History } from "lucide-react";
 import React from "react";
-
+import { ProfileModal } from "@/components/ProfileModal";
+import { HistoryDrawer } from "@/components/HistoryDrawer";
 export function Shell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
+  const [profileOpen, setProfileOpen] = React.useState(false);
+  const [drawerOpen, setDrawerOpen] = React.useState(false);
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground selection:bg-primary/20">
@@ -26,6 +29,20 @@ export function Shell({ children }: { children: React.ReactNode }) {
             >
               About
             </Link>
+            <button
+              onClick={() => setDrawerOpen(true)}
+              className="p-1 hover:text-primary transition-colors"
+              aria-label="History"
+            >
+              <History className="h-5 w-5" />
+            </button>
+            <button
+              onClick={() => setProfileOpen(true)}
+              className="p-1 hover:text-primary transition-colors"
+              aria-label="Settings"
+            >
+              <Settings className="h-5 w-5" />
+            </button>
           </nav>
         </div>
       </header>
@@ -52,6 +69,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </footer>
+
+      {/* Modals & Drawers */}
+      <ProfileModal open={profileOpen} onOpenChange={setProfileOpen} />
+      <HistoryDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
     </div>
   );
 }

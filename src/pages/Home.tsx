@@ -1,25 +1,32 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, Settings, Eye, FileOutput, CheckCircle, Clock, ShieldCheck, Award } from 'lucide-react';
+import { Upload, Settings, Eye, FileOutput, CheckCircle, Clock, ShieldCheck, Award, BookText, FileText } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { parseNotebook, ParsedCell } from '@/lib/ipynb-parser';
 import { generateDocx, DocSettings } from '@/lib/docx-generator';
 import { cellsToHtml } from '@/lib/markdown-to-html';
+import PdfToMarkdown from '@/pages/PdfToMarkdown';
+
+import { addConversionHistory, getSnitchUser } from '@/lib/localStorage';
 
 export default function Home() {
   const { toast } = useToast();
-  const [settings, setSettings] = useState<DocSettings>({
-    title: 'My Notebook',
-    headerLeft: '',
-    headerCenter: '',
-    headerRight: '{date}',
-    footerLeft: '',
-    footerCenter: 'Page {page}',
-    footerRight: ''
+  const [settings, setSettings] = useState<DocSettings>(() => {
+    const user = getSnitchUser();
+    return {
+      title: '',
+      headerLeft: user?.defaultHeader ?? '',
+      headerCenter: '',
+      headerRight: '{date}',
+      footerLeft: user?.name ? user.name : (user?.defaultFooter ?? ''),
+      footerCenter: 'Page {page}',
+      footerRight: ''
+    };
   });
 
   const [parsedCells, setParsedCells] = useState<ParsedCell[]>([]);
@@ -27,20 +34,22 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handleApplyPreset = (preset: 'academic' | 'professional' | 'minimal') => {
+    const user = getSnitchUser();
+    const studentName = user?.name || 'Student Name';
     if (preset === 'academic') {
       setSettings({
         title: settings.title,
         headerLeft: 'Course Code',
         headerCenter: '{date}',
         headerRight: 'Course Name',
-        footerLeft: 'Student Name',
+        footerLeft: studentName,
         footerCenter: '',
         footerRight: 'Page {page}'
       });
     } else if (preset === 'professional') {
       setSettings({
         title: settings.title,
-        headerLeft: '{title}',
+        headerLeft: settings.title ? '{title}' : '',
         headerCenter: '',
         headerRight: '{date}',
         footerLeft: 'Confidential',
@@ -131,6 +140,12 @@ export default function Home() {
     setIsProcessing(true);
     try {
       await generateDocx(parsedCells, settings);
+      addConversionHistory({
+        filename: fileName || 'notebook.ipynb',
+        timestamp: Date.now(),
+        headerConfig: settings.headerLeft || settings.headerCenter || settings.headerRight || '',
+        footerConfig: settings.footerLeft || settings.footerCenter || settings.footerRight || '',
+      });
       toast({
         title: "Conversion complete!",
         description: "Your Word document has been downloaded."
@@ -199,200 +214,227 @@ export default function Home() {
         </p>
       </section>
 
-      <div className="grid lg:grid-cols-2 gap-8 items-start">
-        {/* Left Column: Settings & Upload */}
-        <div className="space-y-8">
-          <Card className="border-primary/10 shadow-md">
-            <CardHeader className="bg-muted/20 border-b">
-              <CardTitle className="flex items-center gap-2">
-                <Settings className="h-5 w-5 text-primary" />
-                Document Settings
-              </CardTitle>
-              <CardDescription>Configure the layout of your exported Word document.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6 pt-6">
-              
-              <div className="space-y-2">
-                <Label htmlFor="title">Document Title</Label>
-                <Input 
-                  id="title" 
-                  value={settings.title} 
-                  onChange={(e) => setSettings({...settings, title: e.target.value})} 
-                  placeholder="E.g. Final Project Report"
-                />
-              </div>
+      <Tabs defaultValue="notebook" className="w-full">
+        <div className="flex justify-center mb-8">
+          <TabsList className="grid w-full max-w-md grid-cols-2 h-12 p-1.5 bg-muted/80 rounded-xl shadow-sm border">
+            <TabsTrigger
+              value="notebook"
+              className="gap-2 font-semibold text-sm rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
+            >
+              <BookText className="h-4 w-4 text-primary" />
+              Jupyter → Word
+            </TabsTrigger>
+            <TabsTrigger
+              value="pdf"
+              className="gap-2 font-semibold text-sm rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
+            >
+              <FileText className="h-4 w-4 text-primary" />
+              PDF → Markdown
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-              <div className="space-y-4">
-                <h4 className="text-sm font-semibold flex items-center gap-2 text-slate-800 dark:text-slate-200">
-                  <div className="w-full h-px bg-border flex-1" />
-                  Header Configuration
-                  <div className="w-full h-px bg-border flex-1" />
-                </h4>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Left</Label>
-                    <Input className="h-8 text-sm" value={settings.headerLeft} onChange={(e) => setSettings({...settings, headerLeft: e.target.value})} />
+        <TabsContent value="notebook" className="mt-0 focus-visible:outline-none space-y-8">
+          <div className="grid lg:grid-cols-2 gap-8 items-start">
+            {/* Left Column: Settings & Upload */}
+            <div className="space-y-8">
+              <Card className="border-primary/10 shadow-md">
+                <CardHeader className="bg-muted/20 border-b">
+                  <CardTitle className="flex items-center gap-2">
+                    <Settings className="h-5 w-5 text-primary" />
+                    Document Settings
+                  </CardTitle>
+                  <CardDescription>Configure the layout of your exported Word document.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6 pt-6">
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="title">Document Title</Label>
+                    <Input 
+                      id="title" 
+                      value={settings.title} 
+                      onChange={(e) => setSettings({...settings, title: e.target.value})} 
+                      placeholder="E.g. Final Project Report (Leave empty to use notebook title)"
+                    />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Center</Label>
-                    <Input className="h-8 text-sm" value={settings.headerCenter} onChange={(e) => setSettings({...settings, headerCenter: e.target.value})} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Right</Label>
-                    <Input className="h-8 text-sm" value={settings.headerRight} onChange={(e) => setSettings({...settings, headerRight: e.target.value})} />
-                  </div>
-                </div>
-              </div>
 
-              <div className="space-y-4">
-                <h4 className="text-sm font-semibold flex items-center gap-2 text-slate-800 dark:text-slate-200">
-                  <div className="w-full h-px bg-border flex-1" />
-                  Footer Configuration
-                  <div className="w-full h-px bg-border flex-1" />
-                </h4>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Left</Label>
-                    <Input className="h-8 text-sm" value={settings.footerLeft} onChange={(e) => setSettings({...settings, footerLeft: e.target.value})} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Center</Label>
-                    <Input className="h-8 text-sm" value={settings.footerCenter} onChange={(e) => setSettings({...settings, footerCenter: e.target.value})} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Right</Label>
-                    <Input className="h-8 text-sm" value={settings.footerRight} onChange={(e) => setSettings({...settings, footerRight: e.target.value})} />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Quick Presets</Label>
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" onClick={() => handleApplyPreset('academic')} className="text-xs h-8">
-                    Academic Format
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleApplyPreset('professional')} className="text-xs h-8">
-                    Professional Format
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleApplyPreset('minimal')} className="text-xs h-8">
-                    Minimal Format
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Variables available: <code className="text-[10px] bg-muted px-1 py-0.5 rounded">{"{title}"}</code>, <code className="text-[10px] bg-muted px-1 py-0.5 rounded">{"{date}"}</code>, <code className="text-[10px] bg-muted px-1 py-0.5 rounded">{"{page}"}</code>, <code className="text-[10px] bg-muted px-1 py-0.5 rounded">{"{pages}"}</code>
-                </p>
-              </div>
-
-            </CardContent>
-          </Card>
-
-          <Card className="border-primary/20 shadow-lg border-2">
-            <CardContent className="p-0">
-              <div 
-                {...getRootProps()} 
-                className={`p-8 md:p-12 text-center cursor-pointer transition-all duration-200 
-                  ${isDragActive ? 'bg-primary/5' : 'hover:bg-muted/50'}
-                  ${fileName ? 'bg-green-50/50 dark:bg-green-950/20' : ''}
-                `}
-              >
-                <input {...getInputProps()} data-testid="input-file-upload" />
-                
-                {fileName ? (
-                  <div className="space-y-4 animate-in zoom-in duration-300">
-                    <div className="mx-auto w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center dark:bg-green-900 dark:text-green-300">
-                      <CheckCircle className="w-8 h-8" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-lg text-slate-800 dark:text-slate-200">{fileName}</p>
-                      <p className="text-sm text-muted-foreground">{parsedCells.length} cells parsed successfully</p>
-                    </div>
-                  </div>
-                ) : (
                   <div className="space-y-4">
-                    <div className="mx-auto w-16 h-16 bg-primary/10 text-primary rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                      <Upload className="w-8 h-8" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-lg text-slate-800 dark:text-slate-200">Drag & drop your notebook here</p>
-                      <p className="text-sm text-muted-foreground mt-1">or click to browse files (accepts .ipynb only)</p>
+                    <h4 className="text-sm font-semibold flex items-center gap-2 text-slate-800 dark:text-slate-200">
+                      <div className="w-full h-px bg-border flex-1" />
+                      Header Configuration
+                      <div className="w-full h-px bg-border flex-1" />
+                    </h4>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Left</Label>
+                        <Input className="h-8 text-sm" value={settings.headerLeft} onChange={(e) => setSettings({...settings, headerLeft: e.target.value})} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Center</Label>
+                        <Input className="h-8 text-sm" value={settings.headerCenter} onChange={(e) => setSettings({...settings, headerCenter: e.target.value})} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Right</Label>
+                        <Input className="h-8 text-sm" value={settings.headerRight} onChange={(e) => setSettings({...settings, headerRight: e.target.value})} />
+                      </div>
                     </div>
                   </div>
-                )}
-              </div>
-            </CardContent>
-            {fileName && (
-              <CardFooter className="p-4 bg-muted/30 border-t flex justify-end">
-                <Button 
-                  onClick={(e) => { e.stopPropagation(); handleConvert(); }} 
-                  disabled={isProcessing}
-                  size="lg"
-                  className="w-full sm:w-auto font-semibold gap-2 shadow-sm"
-                  data-testid="button-convert"
-                >
-                  {isProcessing ? (
-                    <Clock className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <FileOutput className="w-5 h-5" />
-                  )}
-                  {isProcessing ? 'Converting...' : 'Convert to Word (.docx)'}
-                </Button>
-              </CardFooter>
-            )}
-          </Card>
-        </div>
 
-        {/* Right Column: Live Preview */}
-        <div className="sticky top-24">
-          <Card className="border-border shadow-sm overflow-hidden h-[800px] flex flex-col bg-[#f8fafc] dark:bg-[#0f172a]">
-            <CardHeader className="bg-white/80 dark:bg-slate-900/80 backdrop-blur border-b py-3 px-4 flex-none">
-              <CardTitle className="text-sm font-medium flex items-center gap-2 text-slate-600 dark:text-slate-300">
-                <Eye className="h-4 w-4" />
-                Live Document Preview
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6 flex-1 overflow-y-auto">
-              {/* Paper mock */}
-              <div className="bg-white dark:bg-slate-950 w-full min-h-[1056px] shadow-sm ring-1 ring-black/5 mx-auto p-8 sm:p-12 relative flex flex-col">
-                
-                {/* Header Mock */}
-                <div className="flex justify-between items-start text-[11px] text-slate-400 font-serif border-b pb-4 mb-8">
-                  <div className="w-1/3 text-left whitespace-pre-wrap">{processZoneText(settings.headerLeft)}</div>
-                  <div className="w-1/3 text-center whitespace-pre-wrap">{processZoneText(settings.headerCenter)}</div>
-                  <div className="w-1/3 text-right whitespace-pre-wrap">{processZoneText(settings.headerRight)}</div>
-                </div>
-
-                {/* Title */}
-                {settings.title && (
-                  <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-50 mb-8 font-sans">
-                    {settings.title}
-                  </h1>
-                )}
-
-                {/* Content */}
-                <div className="flex-1 text-slate-800 dark:text-slate-200">
-                  {parsedCells.length > 0 ? (
-                    <div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: previewHtml }} />
-                  ) : (
-                    <div className="flex flex-col items-center justify-center h-64 text-slate-400 space-y-4">
-                      <Eye className="w-12 h-12 opacity-20" />
-                      <p className="text-sm italic">Document content will appear here once a file is uploaded...</p>
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-semibold flex items-center gap-2 text-slate-800 dark:text-slate-200">
+                      <div className="w-full h-px bg-border flex-1" />
+                      Footer Configuration
+                      <div className="w-full h-px bg-border flex-1" />
+                    </h4>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Left</Label>
+                        <Input className="h-8 text-sm" value={settings.footerLeft} onChange={(e) => setSettings({...settings, footerLeft: e.target.value})} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Center</Label>
+                        <Input className="h-8 text-sm" value={settings.footerCenter} onChange={(e) => setSettings({...settings, footerCenter: e.target.value})} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Right</Label>
+                        <Input className="h-8 text-sm" value={settings.footerRight} onChange={(e) => setSettings({...settings, footerRight: e.target.value})} />
+                      </div>
                     </div>
-                  )}
-                </div>
+                  </div>
 
-                {/* Footer Mock */}
-                <div className="flex justify-between items-end text-[11px] text-slate-400 font-serif border-t pt-4 mt-12">
-                  <div className="w-1/3 text-left whitespace-pre-wrap">{processZoneText(settings.footerLeft)}</div>
-                  <div className="w-1/3 text-center whitespace-pre-wrap">{processZoneText(settings.footerCenter)}</div>
-                  <div className="w-1/3 text-right whitespace-pre-wrap">{processZoneText(settings.footerRight)}</div>
-                </div>
+                  <div className="space-y-3">
+                    <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Quick Presets</Label>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleApplyPreset('academic')} className="text-xs h-8">
+                        Academic Format
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => handleApplyPreset('professional')} className="text-xs h-8">
+                        Professional Format
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => handleApplyPreset('minimal')} className="text-xs h-8">
+                        Minimal Format
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Variables available: <code className="text-[10px] bg-muted px-1 py-0.5 rounded">{"{title}"}</code>, <code className="text-[10px] bg-muted px-1 py-0.5 rounded">{"{date}"}</code>, <code className="text-[10px] bg-muted px-1 py-0.5 rounded">{"{page}"}</code>, <code className="text-[10px] bg-muted px-1 py-0.5 rounded">{"{pages}"}</code>
+                    </p>
+                  </div>
 
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-primary/20 shadow-lg border-2">
+                <CardContent className="p-0">
+                  <div 
+                    {...getRootProps()} 
+                    className={`p-8 md:p-12 text-center cursor-pointer transition-all duration-200 
+                      ${isDragActive ? 'bg-primary/5' : 'hover:bg-muted/50'}
+                      ${fileName ? 'bg-green-50/50 dark:bg-green-950/20' : ''}
+                    `}
+                  >
+                    <input {...getInputProps()} data-testid="input-file-upload" />
+                    
+                    {fileName ? (
+                      <div className="space-y-4 animate-in zoom-in duration-300">
+                        <div className="mx-auto w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center dark:bg-green-900 dark:text-green-300">
+                          <CheckCircle className="w-8 h-8" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-lg text-slate-800 dark:text-slate-200">{fileName}</p>
+                          <p className="text-sm text-muted-foreground">{parsedCells.length} cells parsed successfully</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="mx-auto w-16 h-16 bg-primary/10 text-primary rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <Upload className="w-8 h-8" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-lg text-slate-800 dark:text-slate-200">Drag & drop your notebook here</p>
+                          <p className="text-sm text-muted-foreground mt-1">or click to browse files (accepts .ipynb only)</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+                {fileName && (
+                  <CardFooter className="p-4 bg-muted/30 border-t flex justify-end">
+                    <Button 
+                      onClick={(e) => { e.stopPropagation(); handleConvert(); }} 
+                      disabled={isProcessing}
+                      size="lg"
+                      className="w-full sm:w-auto font-semibold gap-2 shadow-sm"
+                      data-testid="button-convert"
+                    >
+                      {isProcessing ? (
+                        <Clock className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <FileOutput className="w-5 h-5" />
+                      )}
+                      {isProcessing ? 'Converting...' : 'Convert to Word (.docx)'}
+                    </Button>
+                  </CardFooter>
+                )}
+              </Card>
+            </div>
+
+            {/* Right Column: Live Preview */}
+            <div className="sticky top-24">
+              <Card className="border-border shadow-sm overflow-hidden h-[800px] flex flex-col bg-[#f8fafc] dark:bg-[#0f172a]">
+                <CardHeader className="bg-white/80 dark:bg-slate-900/80 backdrop-blur border-b py-3 px-4 flex-none">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                    <Eye className="h-4 w-4" />
+                    Live Document Preview
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6 flex-1 overflow-y-auto">
+                  {/* Paper mock */}
+                  <div className="bg-white dark:bg-slate-950 w-full min-h-[1056px] shadow-sm ring-1 ring-black/5 mx-auto p-8 sm:p-12 relative flex flex-col">
+                    
+                    {/* Header Mock */}
+                    <div className="flex justify-between items-start text-[11px] text-slate-400 font-serif border-b pb-4 mb-8">
+                      <div className="w-1/3 text-left whitespace-pre-wrap">{processZoneText(settings.headerLeft)}</div>
+                      <div className="w-1/3 text-center whitespace-pre-wrap">{processZoneText(settings.headerCenter)}</div>
+                      <div className="w-1/3 text-right whitespace-pre-wrap">{processZoneText(settings.headerRight)}</div>
+                    </div>
+
+                    {/* Title */}
+                    {settings.title && (
+                      <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-50 mb-8 font-sans">
+                        {settings.title}
+                      </h1>
+                    )}
+
+                    {/* Content */}
+                    <div className="flex-1 text-slate-800 dark:text-slate-200">
+                      {parsedCells.length > 0 ? (
+                        <div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-64 text-slate-400 space-y-4">
+                          <Eye className="w-12 h-12 opacity-20" />
+                          <p className="text-sm italic">Document content will appear here once a file is uploaded...</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Footer Mock */}
+                    <div className="flex justify-between items-end text-[11px] text-slate-400 font-serif border-t pt-4 mt-12">
+                      <div className="w-1/3 text-left whitespace-pre-wrap">{processZoneText(settings.footerLeft)}</div>
+                      <div className="w-1/3 text-center whitespace-pre-wrap">{processZoneText(settings.footerCenter)}</div>
+                      <div className="w-1/3 text-right whitespace-pre-wrap">{processZoneText(settings.footerRight)}</div>
+                    </div>
+
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="pdf" className="mt-0 focus-visible:outline-none">
+          <PdfToMarkdown />
+        </TabsContent>
+      </Tabs>
 
     </div>
   );

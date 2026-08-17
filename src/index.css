@@ -154,4 +154,15 @@
     color: hsl(var(--muted-foreground));
     pointer-events: none;
   }
+  .prose pre {
+    background-color: transparent !important;
+    color: inherit !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .prose pre code {
+    background-color: transparent !important;
+    color: inherit !important;
+    padding: 0 !important;
+  }
 }

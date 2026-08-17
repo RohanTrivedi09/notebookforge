@@ -79,20 +79,45 @@ function scaleDimensions(
 
 type DocRun = TextRun | ExternalHyperlink;
 
+interface RunFormatOptions {
+  bold?: boolean;
+  italics?: boolean;
+  color?: string;
+  size?: number;
+  font?: string;
+}
+
 /**
  * Parse a single markdown line into docx runs.
- * Handles **bold**, *italic*, and [text](url).
+ * Handles **bold**, *italic*, `code`, and [text](url).
  */
-const parseMarkdownLineToRuns = (line: string): DocRun[] => {
+const parseMarkdownLineToRuns = (
+  line: string,
+  baseOptions: RunFormatOptions = {},
+): DocRun[] => {
   const runs: DocRun[] = [];
-  // Matches **bold**, *italic*, [link](url) in order
-  const regex = /(\*\*.*?\*\*|\*.*?\*|__.*?__|_[^_]+_|\[([^\]]+)\]\(([^)]+)\))/g;
+  const baseColor = baseOptions.color || '000000';
+  const baseSize = baseOptions.size || 22;
+  const baseFont = baseOptions.font || 'Calibri';
+
+  // Matches **bold**, *italic*, `code`, [link](url)
+  const regex =
+    /(\*\*.*?\*\*|\*.*?\*|__.*?__|_[^_]+_|`[^`]+`|\[([^\]]+)\]\(([^)]+)\))/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(line)) !== null) {
     if (match.index > lastIndex) {
-      runs.push(new TextRun({ text: line.substring(lastIndex, match.index) }));
+      runs.push(
+        new TextRun({
+          text: line.substring(lastIndex, match.index),
+          bold: baseOptions.bold,
+          italics: baseOptions.italics,
+          color: baseColor,
+          size: baseSize,
+          font: baseFont,
+        }),
+      );
     }
 
     const token = match[0];
@@ -108,19 +133,43 @@ const parseMarkdownLineToRuns = (line: string): DocRun[] => {
             new TextRun({
               text: linkText,
               style: 'Hyperlink',
+              color: '2563eb',
+              underline: {},
             }),
           ],
         }),
       );
+    } else if (token.startsWith('`')) {
+      // Inline code: `code`
+      runs.push(
+        new TextRun({
+          text: token.substring(1, token.length - 1),
+          font: 'JetBrains Mono',
+          size: baseSize - 2,
+          color: '334155',
+          shading: { type: ShadingType.CLEAR, fill: 'f1f5f9' },
+        }),
+      );
     } else if (token.startsWith('**') || token.startsWith('__')) {
       runs.push(
-        new TextRun({ text: token.substring(2, token.length - 2), bold: true }),
+        new TextRun({
+          text: token.substring(2, token.length - 2),
+          bold: true,
+          italics: baseOptions.italics,
+          color: baseColor,
+          size: baseSize,
+          font: baseFont,
+        }),
       );
     } else {
       runs.push(
         new TextRun({
           text: token.substring(1, token.length - 1),
+          bold: baseOptions.bold,
           italics: true,
+          color: baseColor,
+          size: baseSize,
+          font: baseFont,
         }),
       );
     }
@@ -128,10 +177,30 @@ const parseMarkdownLineToRuns = (line: string): DocRun[] => {
   }
 
   if (lastIndex < line.length) {
-    runs.push(new TextRun({ text: line.substring(lastIndex) }));
+    runs.push(
+      new TextRun({
+        text: line.substring(lastIndex),
+        bold: baseOptions.bold,
+        italics: baseOptions.italics,
+        color: baseColor,
+        size: baseSize,
+        font: baseFont,
+      }),
+    );
   }
 
-  return runs.length ? runs : [new TextRun({ text: line })];
+  return runs.length
+    ? runs
+    : [
+        new TextRun({
+          text: line,
+          bold: baseOptions.bold,
+          italics: baseOptions.italics,
+          color: baseColor,
+          size: baseSize,
+          font: baseFont,
+        }),
+      ];
 };
 
 // ── Markdown table → docx Table ──────────────────────────────────────────────
@@ -170,8 +239,11 @@ function buildDocxTable(lines: string[]): Table | null {
       } = {
         children: [
           new Paragraph({
-            children: parseMarkdownLineToRuns(cellText),
-            spacing: { after: 0, before: 0 },
+            children: parseMarkdownLineToRuns(cellText, {
+              bold: isHeader,
+              color: '000000',
+            }),
+            spacing: { after: 40, before: 40 },
           }),
         ],
         width: { size: Math.floor(9000 / colCount), type: WidthType.DXA },
@@ -202,10 +274,14 @@ function buildDocxTable(lines: string[]): Table | null {
 // ── Python syntax highlighting ────────────────────────────────────────────────
 
 const PYTHON_KEYWORDS = new Set([
-  'if','else','elif','for','while','def','class','import','return',
-  'True','False','None','and','or','not','in','is','from','as',
-  'try','except','finally','with','pass','break','continue','yield',
-  'lambda','global','nonlocal','del','raise','assert','async','await',
+  'if', 'else', 'elif', 'for', 'while', 'def', 'class', 'import', 'return',
+  'True', 'False', 'None', 'and', 'or', 'not', 'in', 'is', 'from', 'as',
+  'try', 'except', 'finally', 'with', 'pass', 'break', 'continue', 'yield',
+  'lambda', 'global', 'nonlocal', 'del', 'raise', 'assert', 'async', 'await',
+]);
+
+const PYTHON_BUILTINS = new Set([
+  'print', 'len', 'range', 'str', 'int', 'float', 'list', 'dict', 'set', 'tuple', 'open', 'type', 'sum', 'min', 'max'
 ]);
 
 const tokenizePythonLine = (line: string): TextRun[] => {
@@ -216,7 +292,7 @@ const tokenizePythonLine = (line: string): TextRun[] => {
 
   const flush = (color: string) => {
     if (!currentStr) return;
-    runs.push(new TextRun({ text: currentStr, color, font: 'JetBrains Mono', size: 20 }));
+    runs.push(new TextRun({ text: currentStr, color, font: 'JetBrains Mono', size: 19 }));
     currentStr = '';
   };
 
@@ -225,9 +301,11 @@ const tokenizePythonLine = (line: string): TextRun[] => {
     const parts = currentStr.split(/(\b)/);
     for (const p of parts) {
       if (PYTHON_KEYWORDS.has(p)) {
-        runs.push(new TextRun({ text: p, color: '2563eb', font: 'JetBrains Mono', size: 20 }));
+        runs.push(new TextRun({ text: p, color: '0000ff', bold: true, font: 'JetBrains Mono', size: 19 }));
+      } else if (PYTHON_BUILTINS.has(p)) {
+        runs.push(new TextRun({ text: p, color: '7c3aed', font: 'JetBrains Mono', size: 19 }));
       } else {
-        runs.push(new TextRun({ text: p, color: '1e293b', font: 'JetBrains Mono', size: 20 }));
+        runs.push(new TextRun({ text: p, color: '000000', font: 'JetBrains Mono', size: 19 }));
       }
     }
     currentStr = '';
@@ -263,6 +341,46 @@ const tokenizePythonLine = (line: string): TextRun[] => {
   return runs;
 };
 
+function buildDocxCodeBlock(codeLines: string[]): Table {
+  const cellParagraphs = codeLines.map((codeLine) =>
+    new Paragraph({
+      children: tokenizePythonLine(codeLine),
+      spacing: { before: 15, after: 15 },
+    }),
+  );
+
+  const border = { style: BorderStyle.SINGLE, size: 4, color: 'd1d5db' };
+
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: {
+      top: border,
+      bottom: border,
+      left: border,
+      right: border,
+      insideHorizontal: { style: BorderStyle.NONE, size: 0, color: 'auto' },
+      insideVertical: { style: BorderStyle.NONE, size: 0, color: 'auto' },
+    },
+    rows: [
+      new TableRow({
+        children: [
+          new TableCell({
+            children: cellParagraphs.length > 0 ? cellParagraphs : [new Paragraph({ text: '' })],
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            shading: { type: ShadingType.CLEAR, fill: 'ffffff' },
+            margins: {
+              top: 120,
+              bottom: 120,
+              left: 160,
+              right: 160,
+            },
+          }),
+        ],
+      }),
+    ],
+  });
+}
+
 // ── Header / Footer helpers ───────────────────────────────────────────────────
 
 type AlignmentTypeValue = (typeof AlignmentType)[keyof typeof AlignmentType];
@@ -278,16 +396,16 @@ const createZoneParagraph = (
   while (remaining) {
     const m = remaining.match(/\{(page|pages|date|title)\}/);
     if (!m) {
-      runs.push(new TextRun({ text: remaining }));
+      runs.push(new TextRun({ text: remaining, color: '64748b', font: 'Calibri', size: 19 }));
       break;
     }
     if (m.index! > 0) {
-      runs.push(new TextRun({ text: remaining.substring(0, m.index) }));
+      runs.push(new TextRun({ text: remaining.substring(0, m.index), color: '64748b', font: 'Calibri', size: 19 }));
     }
     if (m[1] === 'page') runs.push(PageNumber.CURRENT);
     else if (m[1] === 'pages') runs.push(PageNumber.TOTAL_PAGES);
     else if (m[1] === 'date')
-      runs.push(new TextRun({ text: new Date().toLocaleDateString() }));
+      runs.push(new TextRun({ text: new Date().toLocaleDateString(), color: '64748b', font: 'Calibri', size: 19 }));
     // {title} is replaced before this function is called
     remaining = remaining.substring(m.index! + m[0].length);
   }
@@ -347,21 +465,26 @@ const createHeaderFooterTable = (
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-type HeadingLevelValue = (typeof HeadingLevel)[keyof typeof HeadingLevel];
-
 export async function generateDocx(
   cells: ParsedCell[],
   settings: DocSettings,
 ): Promise<void> {
   const docChildren: any[] = [];
 
-  // Title
-  if (settings.title) {
+  // Document Title (rendered in bold black)
+  if (settings.title && settings.title.trim()) {
     docChildren.push(
       new Paragraph({
-        text: settings.title,
-        heading: HeadingLevel.HEADING_1,
-        spacing: { after: 400 },
+        children: [
+          new TextRun({
+            text: settings.title,
+            bold: true,
+            size: 36, // 18pt
+            color: '000000',
+            font: 'Calibri',
+          }),
+        ],
+        spacing: { before: 120, after: 240 },
       }),
     );
   }
@@ -376,7 +499,7 @@ export async function generateDocx(
         const trimmed = line.trim();
 
         if (!trimmed) {
-          docChildren.push(new Paragraph({ text: '', spacing: { after: 200 } }));
+          docChildren.push(new Paragraph({ text: '', spacing: { after: 120 } }));
           i++;
           continue;
         }
@@ -391,41 +514,52 @@ export async function generateDocx(
           const tbl = buildDocxTable(tableLines);
           if (tbl) {
             docChildren.push(tbl);
-            docChildren.push(new Paragraph({ text: '', spacing: { after: 160 } }));
+            docChildren.push(new Paragraph({ text: '', spacing: { after: 120 } }));
           }
           continue;
         }
 
-        // Heading
+        // Heading: Render in bold BLACK
         const hMatch = trimmed.match(/^(#{1,6})\s+(.*)$/);
         if (hMatch) {
           const lvl = hMatch[1].length;
-          let level: HeadingLevelValue = HeadingLevel.HEADING_6;
-          if (lvl === 1) level = HeadingLevel.HEADING_1;
-          else if (lvl === 2) level = HeadingLevel.HEADING_2;
-          else if (lvl === 3) level = HeadingLevel.HEADING_3;
-          else if (lvl === 4) level = HeadingLevel.HEADING_4;
-          else if (lvl === 5) level = HeadingLevel.HEADING_5;
+          const sizeMap: Record<number, number> = {
+            1: 32, // 16pt
+            2: 28, // 14pt
+            3: 24, // 12pt
+            4: 22, // 11pt
+            5: 20, // 10pt
+            6: 18, // 9pt
+          };
+          const headingSize = sizeMap[lvl] || 22;
 
           docChildren.push(
             new Paragraph({
-              children: parseMarkdownLineToRuns(hMatch[2]),
-              heading: level,
+              children: parseMarkdownLineToRuns(hMatch[2], {
+                bold: true,
+                color: '000000',
+                size: headingSize,
+                font: 'Calibri',
+              }),
               spacing: { before: 240, after: 120 },
             }),
           );
         } else {
           docChildren.push(
             new Paragraph({
-              children: parseMarkdownLineToRuns(trimmed),
-              spacing: { after: 120 },
+              children: parseMarkdownLineToRuns(trimmed, {
+                color: '000000',
+                size: 22,
+                font: 'Calibri',
+              }),
+              spacing: { after: 100 },
             }),
           );
         }
         i++;
       }
     } else if (cell.type === 'code') {
-      // Label
+      // In [x]: Label
       docChildren.push(
         new Paragraph({
           children: [
@@ -433,38 +567,35 @@ export async function generateDocx(
               text: `In [${cell.cellNumber}]:`,
               color: '6b7280',
               font: 'JetBrains Mono',
-              size: 20,
+              size: 19,
             }),
           ],
-          spacing: { before: 240, after: 100 },
+          spacing: { before: 180, after: 60 },
         }),
       );
 
-      // Source
+      // Source: Boxed table with white bg and thin border
       const codeLines = cell.source.split('\n');
-      for (const codeLine of codeLines) {
-        docChildren.push(
-          new Paragraph({
-            children: tokenizePythonLine(codeLine),
-            shading: { type: ShadingType.CLEAR, fill: 'f1f5f9' },
-            spacing: { after: 0, before: 0 },
-          }),
-        );
-      }
-      docChildren.push(new Paragraph({ text: '', spacing: { after: 120 } }));
+      docChildren.push(buildDocxCodeBlock(codeLines));
+      docChildren.push(new Paragraph({ text: '', spacing: { after: 80 } }));
 
-      // Outputs
+      // Outputs: Plain text / images / errors
       for (const out of cell.outputs) {
         if (out.kind === 'stream' || out.kind === 'result') {
           const outLines = out.text.split('\n');
           for (const outLine of outLines) {
-            if (!outLine) continue;
+            if (!outLine && outLines.length > 1) continue;
             docChildren.push(
               new Paragraph({
                 children: [
-                  new TextRun({ text: outLine, font: 'JetBrains Mono', size: 20 }),
+                  new TextRun({
+                    text: outLine,
+                    font: 'JetBrains Mono',
+                    size: 19,
+                    color: '000000',
+                  }),
                 ],
-                spacing: { after: 0, before: 0 },
+                spacing: { after: 20, before: 20 },
               }),
             );
           }
@@ -491,7 +622,7 @@ export async function generateDocx(
                     type: imgType,
                   }),
                 ],
-                spacing: { before: 120, after: 240 },
+                spacing: { before: 100, after: 180 },
               }),
             );
           } catch {
@@ -510,10 +641,10 @@ export async function generateDocx(
                     text: cleanLine,
                     color: 'dc2626',
                     font: 'JetBrains Mono',
-                    size: 20,
+                    size: 19,
                   }),
                 ],
-                spacing: { after: 0, before: 0 },
+                spacing: { after: 20, before: 20 },
               }),
             );
           }
@@ -545,6 +676,16 @@ export async function generateDocx(
   });
 
   const doc = new Document({
+    styles: {
+      default: {
+        document: {
+          run: {
+            font: 'Calibri',
+            color: '000000',
+          },
+        },
+      },
+    },
     sections: [
       {
         headers: { default: header },
@@ -556,6 +697,6 @@ export async function generateDocx(
 
   const blob = await Packer.toBlob(doc);
   const safeTitle =
-    settings.title.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'notebook';
+    settings.title.trim().replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'notebook';
   saveAs(blob, `${safeTitle}.docx`);
 }

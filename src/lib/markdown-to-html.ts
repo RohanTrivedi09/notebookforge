@@ -124,15 +124,15 @@ export function cellsToHtml(cells: ParsedCell[]): string {
     } else if (cell.type === 'code') {
       html += `<div class="mb-6">`;
       html += `<div class="text-gray-500 font-mono text-sm mb-1">In [${cell.cellNumber}]:</div>`;
-      html += `<pre class="bg-slate-100 dark:bg-slate-900 p-3 rounded-md overflow-x-auto text-sm font-mono text-slate-800 dark:text-slate-200"><code>${escapeHtml(cell.source)}</code></pre>`;
+      html += `<pre class="bg-slate-50 border border-slate-200 p-3 rounded-md overflow-x-auto text-sm font-mono text-slate-800"><code>${escapeHtml(cell.source)}</code></pre>`;
 
       for (const out of cell.outputs) {
         if (out.kind === 'stream' || out.kind === 'result') {
-          html += `<pre class="mt-2 text-sm font-mono whitespace-pre-wrap">${escapeHtml(out.text)}</pre>`;
+          html += `<pre class="mt-2 bg-white border border-slate-200 p-3 rounded-md overflow-x-auto text-sm font-mono text-slate-800 whitespace-pre-wrap"><code>${escapeHtml(out.text)}</code></pre>`;
         } else if (out.kind === 'image') {
           html += `<div class="mt-2"><img src="data:${out.mimeType};base64,${out.data}" alt="Cell output" class="max-w-full h-auto rounded border border-gray-200" style="max-height:400px;object-fit:contain;" /></div>`;
         } else if (out.kind === 'error') {
-          html += `<pre class="mt-2 text-sm font-mono text-red-600 dark:text-red-400 whitespace-pre-wrap">`;
+          html += `<pre class="mt-2 bg-red-50 border border-red-200 p-3 rounded-md overflow-x-auto text-sm font-mono text-red-700 whitespace-pre-wrap"><code>`;
           for (const traceLine of out.traceback) {
             const cleanLine = traceLine.replace(
               /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g,
@@ -140,7 +140,7 @@ export function cellsToHtml(cells: ParsedCell[]): string {
             );
             html += escapeHtml(cleanLine) + '\n';
           }
-          html += `</pre>`;
+          html += `</code></pre>`;
         }
       }
       html += `</div>`;
