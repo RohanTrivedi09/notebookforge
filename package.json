@@ -76,15 +76,17 @@
     "zod": "catalog:"
   },
   "dependencies": {
+    "@types/jszip": "^3.4.1",
     "docx": "^9.7.1",
     "file-saver": "^2.0.5",
-    "react-dropzone": "^19.2.0",
-    "pdfjs-dist": "^4.2.0",
-    "react-markdown": "^9.0.0",
-    "remark-gfm": "^3.0.1",
-    "remark-math": "^5.1.1",
-    "rehype-katex": "^6.0.2",
+    "jszip": "^3.10.1",
     "katex": "^0.16.9",
-    "react-katex": "^3.0.1"
+    "pdfjs-dist": "^4.2.0",
+    "react-dropzone": "^19.2.0",
+    "react-katex": "^3.0.1",
+    "react-markdown": "^9.0.0",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0"
   }
 }

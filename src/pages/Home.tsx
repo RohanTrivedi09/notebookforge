@@ -1,6 +1,20 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, Settings, Eye, FileOutput, CheckCircle, Clock, ShieldCheck, Award, BookText, FileText } from 'lucide-react';
+import {
+  Upload,
+  Settings,
+  Eye,
+  FileOutput,
+  CheckCircle,
+  Clock,
+  ShieldCheck,
+  Award,
+  BookText,
+  FileText,
+  Files,
+  Image as ImageIcon,
+  SlidersHorizontal,
+} from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,10 +22,12 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { parseNotebook, ParsedCell } from '@/lib/ipynb-parser';
-import { generateDocx, DocSettings } from '@/lib/docx-generator';
+import { generateDocx, DocSettings, FontTheme } from '@/lib/docx-generator';
 import { cellsToHtml } from '@/lib/markdown-to-html';
 import PdfToMarkdown from '@/pages/PdfToMarkdown';
-
+import { MarkdownToDocx } from '@/components/MarkdownToDocx';
+import { BatchConverter } from '@/components/BatchConverter';
+import { PlotsGalleryModal } from '@/components/PlotsGalleryModal';
 import { addConversionHistory, getSnitchUser } from '@/lib/localStorage';
 
 export default function Home() {
@@ -25,114 +41,137 @@ export default function Home() {
       headerRight: '{date}',
       footerLeft: user?.name ? user.name : (user?.defaultFooter ?? ''),
       footerCenter: 'Page {page}',
-      footerRight: ''
+      footerRight: '',
+      fontTheme: 'academic',
+      includeOutputs: true,
+      includeErrors: true,
+      includeImages: true,
     };
   });
 
   const [parsedCells, setParsedCells] = useState<ParsedCell[]>([]);
   const [fileName, setFileName] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+
+  const plotCount = useMemo(() => {
+    let count = 0;
+    for (const cell of parsedCells) {
+      if (cell.type === 'code') {
+        for (const out of cell.outputs) {
+          if (out.kind === 'image') count++;
+        }
+      }
+    }
+    return count;
+  }, [parsedCells]);
 
   const handleApplyPreset = (preset: 'academic' | 'professional' | 'minimal') => {
     const user = getSnitchUser();
     const studentName = user?.name || 'Student Name';
     if (preset === 'academic') {
       setSettings({
-        title: settings.title,
+        ...settings,
+        fontTheme: 'academic',
         headerLeft: 'Course Code',
         headerCenter: '{date}',
         headerRight: 'Course Name',
         footerLeft: studentName,
         footerCenter: '',
-        footerRight: 'Page {page}'
+        footerRight: 'Page {page}',
       });
     } else if (preset === 'professional') {
       setSettings({
-        title: settings.title,
+        ...settings,
+        fontTheme: 'modern',
         headerLeft: settings.title ? '{title}' : '',
         headerCenter: '',
         headerRight: '{date}',
         footerLeft: 'Confidential',
         footerCenter: '',
-        footerRight: 'Page {page} of {pages}'
+        footerRight: 'Page {page} of {pages}',
       });
     } else if (preset === 'minimal') {
       setSettings({
-        title: settings.title,
+        ...settings,
+        fontTheme: 'classic',
         headerLeft: '',
         headerCenter: '',
         headerRight: '',
         footerLeft: '',
         footerCenter: 'Page {page}',
-        footerRight: ''
+        footerRight: '',
       });
     }
   };
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    const file = acceptedFiles[0];
-    if (!file) return;
+  const onDrop = useCallback(
+    (acceptedFiles: File[]) => {
+      const file = acceptedFiles[0];
+      if (!file) return;
 
-    if (!file.name.endsWith('.ipynb')) {
-      toast({
-        title: "Invalid file type",
-        description: "Please upload a valid Jupyter Notebook (.ipynb) file.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setFileName(file.name);
-    setIsProcessing(true);
-
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const text = e.target?.result as string;
-        const json = JSON.parse(text);
-        const cells = parseNotebook(json);
-        setParsedCells(cells);
+      if (!file.name.endsWith('.ipynb')) {
         toast({
-          title: "File loaded successfully",
-          description: `Parsed ${cells.length} cells. Ready to convert.`
+          title: 'Invalid file type',
+          description: 'Please upload a valid Jupyter Notebook (.ipynb) file.',
+          variant: 'destructive',
         });
-      } catch (err: any) {
-        toast({
-          title: "Error parsing notebook",
-          description: err.message || "The file could not be parsed.",
-          variant: "destructive"
-        });
-        setFileName('');
-        setParsedCells([]);
-      } finally {
-        setIsProcessing(false);
+        return;
       }
-    };
-    reader.onerror = () => {
-      toast({
-        title: "Error reading file",
-        description: "An error occurred while reading the file.",
-        variant: "destructive"
-      });
-      setIsProcessing(false);
-    };
-    reader.readAsText(file);
-  }, [toast]);
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({ 
+      setFileName(file.name);
+      setIsProcessing(true);
+
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const text = e.target?.result as string;
+          const json = JSON.parse(text);
+          const cells = parseNotebook(json);
+          setParsedCells(cells);
+          toast({
+            title: 'File loaded successfully',
+            description: `Parsed ${cells.length} cells. Ready to convert.`,
+          });
+        } catch (err: any) {
+          toast({
+            title: 'Error parsing notebook',
+            description: err.message || 'The file could not be parsed.',
+            variant: 'destructive',
+          });
+          setFileName('');
+          setParsedCells([]);
+        } finally {
+          setIsProcessing(false);
+        }
+      };
+      reader.onerror = () => {
+        toast({
+          title: 'Error reading file',
+          description: 'An error occurred while reading the file.',
+          variant: 'destructive',
+        });
+        setIsProcessing(false);
+      };
+      reader.readAsText(file);
+    },
+    [toast],
+  );
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      'application/x-ipynb+json': ['.ipynb']
+      'application/x-ipynb+json': ['.ipynb'],
     },
-    maxFiles: 1
+    maxFiles: 1,
   });
 
   const handleConvert = async () => {
     if (parsedCells.length === 0) {
       toast({
-        title: "No notebook loaded",
-        description: "Please upload a .ipynb file first.",
-        variant: "destructive"
+        title: 'No notebook loaded',
+        description: 'Please upload a .ipynb file first.',
+        variant: 'destructive',
       });
       return;
     }
@@ -147,14 +186,14 @@ export default function Home() {
         footerConfig: settings.footerLeft || settings.footerCenter || settings.footerRight || '',
       });
       toast({
-        title: "Conversion complete!",
-        description: "Your Word document has been downloaded."
+        title: 'Conversion complete!',
+        description: 'Your Word document has been downloaded.',
       });
     } catch (err: any) {
       toast({
-        title: "Conversion failed",
-        description: err.message || "An error occurred during conversion.",
-        variant: "destructive"
+        title: 'Conversion failed',
+        description: err.message || 'An error occurred during conversion.',
+        variant: 'destructive',
       });
     } finally {
       setIsProcessing(false);
@@ -176,86 +215,110 @@ export default function Home() {
   }, [parsedCells]);
 
   return (
-    <div className="space-y-16 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-16">
-      
+    <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-16">
       {/* Hero Section */}
-      <section className="text-center space-y-6 pt-8 pb-4">
-        <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-secondary text-secondary-foreground">
-          v1.0 is live — In-browser conversions
+      <section className="text-center space-y-4 pt-6 pb-2">
+        <div className="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold border-transparent bg-secondary text-secondary-foreground">
+          v2.0 is live — In-browser Jupyter, PDF & Markdown Studio
         </div>
         <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-slate-900 dark:text-slate-50 max-w-4xl mx-auto">
-          Free Jupyter Notebook to <br className="hidden md:block"/> Word Converter
+          Convert Jupyter, PDF & Markdown <br className="hidden md:block" /> to Beautiful Word Documents
         </h1>
-        <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-          Convert .ipynb files to .docx documents instantly - No registration required!
+        <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+          Convert .ipynb and .md files to formatted .docx documents natively in your browser. 100% private.
         </p>
-        
-        <div className="flex flex-wrap justify-center gap-4 pt-4">
+
+        <div className="flex flex-wrap justify-center gap-6 pt-2">
           <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
             <Clock className="h-4 w-4 text-primary" />
-            Lightning Fast Conversion
+            Lightning Fast
           </div>
           <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
             <ShieldCheck className="h-4 w-4 text-primary" />
-            100% Secure & Private
+            100% Local & Private
           </div>
           <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
             <Award className="h-4 w-4 text-primary" />
-            Professional Quality
+            Academic & Pro Formats
           </div>
         </div>
-        <p className="text-xs text-muted-foreground pt-2">Average conversion time: 3 seconds</p>
       </section>
 
-      {/* SEO Paragraph Block */}
-      <section className="max-w-3xl mx-auto bg-muted/30 p-6 rounded-lg border text-sm text-muted-foreground leading-relaxed">
-        <p>
-          NotebookForge is the ultimate tool for academics, data scientists, and engineers looking to transform Jupyter Notebooks (.ipynb) into Microsoft Word (.docx) documents. Whether you are submitting a university assignment, preparing a technical report, or sharing findings with non-technical stakeholders, our precise parser ensures your code, markdown, and error traces are beautifully formatted natively in Word. Because the conversion runs entirely in your browser, your code remains completely private.
-        </p>
-      </section>
-
+      {/* Main Multi-tool Tab Navigation */}
       <Tabs defaultValue="notebook" className="w-full">
         <div className="flex justify-center mb-8">
-          <TabsList className="grid w-full max-w-md grid-cols-2 h-12 p-1.5 bg-muted/80 rounded-xl shadow-sm border">
+          <TabsList className="grid w-full max-w-2xl grid-cols-2 sm:grid-cols-4 h-12 p-1.5 bg-muted/80 rounded-xl shadow-sm border">
             <TabsTrigger
               value="notebook"
-              className="gap-2 font-semibold text-sm rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
+              className="gap-1.5 font-semibold text-xs sm:text-sm rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
             >
               <BookText className="h-4 w-4 text-primary" />
               Jupyter → Word
             </TabsTrigger>
             <TabsTrigger
               value="pdf"
-              className="gap-2 font-semibold text-sm rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
+              className="gap-1.5 font-semibold text-xs sm:text-sm rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
             >
               <FileText className="h-4 w-4 text-primary" />
               PDF → Markdown
             </TabsTrigger>
+            <TabsTrigger
+              value="markdown"
+              className="gap-1.5 font-semibold text-xs sm:text-sm rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
+            >
+              <FileOutput className="h-4 w-4 text-primary" />
+              Markdown → Word
+            </TabsTrigger>
+            <TabsTrigger
+              value="batch"
+              className="gap-1.5 font-semibold text-xs sm:text-sm rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
+            >
+              <Files className="h-4 w-4 text-primary" />
+              Batch Convert
+            </TabsTrigger>
           </TabsList>
         </div>
 
+        {/* Tab 1: Jupyter -> Word */}
         <TabsContent value="notebook" className="mt-0 focus-visible:outline-none space-y-8">
           <div className="grid lg:grid-cols-2 gap-8 items-start">
             {/* Left Column: Settings & Upload */}
-            <div className="space-y-8">
+            <div className="space-y-6">
               <Card className="border-primary/10 shadow-md">
                 <CardHeader className="bg-muted/20 border-b">
                   <CardTitle className="flex items-center gap-2">
                     <Settings className="h-5 w-5 text-primary" />
                     Document Settings
                   </CardTitle>
-                  <CardDescription>Configure the layout of your exported Word document.</CardDescription>
+                  <CardDescription>Configure layout, presets, and font theme for Word export.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6 pt-6">
-                  
                   <div className="space-y-2">
                     <Label htmlFor="title">Document Title</Label>
-                    <Input 
-                      id="title" 
-                      value={settings.title} 
-                      onChange={(e) => setSettings({...settings, title: e.target.value})} 
-                      placeholder="E.g. Final Project Report (Leave empty to use notebook title)"
+                    <Input
+                      id="title"
+                      value={settings.title}
+                      onChange={(e) => setSettings({ ...settings, title: e.target.value })}
+                      placeholder="Leave empty to use notebook heading"
                     />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Font & Typography Theme</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['academic', 'modern', 'classic'] as FontTheme[]).map((theme) => (
+                        <Button
+                          key={theme}
+                          type="button"
+                          variant={settings.fontTheme === theme ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setSettings({ ...settings, fontTheme: theme })}
+                          className="capitalize text-xs font-medium"
+                        >
+                          {theme}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="space-y-4">
@@ -267,15 +330,27 @@ export default function Home() {
                     <div className="grid grid-cols-3 gap-3">
                       <div className="space-y-1">
                         <Label className="text-xs text-muted-foreground">Left</Label>
-                        <Input className="h-8 text-sm" value={settings.headerLeft} onChange={(e) => setSettings({...settings, headerLeft: e.target.value})} />
+                        <Input
+                          className="h-8 text-sm"
+                          value={settings.headerLeft}
+                          onChange={(e) => setSettings({ ...settings, headerLeft: e.target.value })}
+                        />
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs text-muted-foreground">Center</Label>
-                        <Input className="h-8 text-sm" value={settings.headerCenter} onChange={(e) => setSettings({...settings, headerCenter: e.target.value})} />
+                        <Input
+                          className="h-8 text-sm"
+                          value={settings.headerCenter}
+                          onChange={(e) => setSettings({ ...settings, headerCenter: e.target.value })}
+                        />
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs text-muted-foreground">Right</Label>
-                        <Input className="h-8 text-sm" value={settings.headerRight} onChange={(e) => setSettings({...settings, headerRight: e.target.value})} />
+                        <Input
+                          className="h-8 text-sm"
+                          value={settings.headerRight}
+                          onChange={(e) => setSettings({ ...settings, headerRight: e.target.value })}
+                        />
                       </div>
                     </div>
                   </div>
@@ -289,21 +364,70 @@ export default function Home() {
                     <div className="grid grid-cols-3 gap-3">
                       <div className="space-y-1">
                         <Label className="text-xs text-muted-foreground">Left</Label>
-                        <Input className="h-8 text-sm" value={settings.footerLeft} onChange={(e) => setSettings({...settings, footerLeft: e.target.value})} />
+                        <Input
+                          className="h-8 text-sm"
+                          value={settings.footerLeft}
+                          onChange={(e) => setSettings({ ...settings, footerLeft: e.target.value })}
+                        />
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs text-muted-foreground">Center</Label>
-                        <Input className="h-8 text-sm" value={settings.footerCenter} onChange={(e) => setSettings({...settings, footerCenter: e.target.value})} />
+                        <Input
+                          className="h-8 text-sm"
+                          value={settings.footerCenter}
+                          onChange={(e) => setSettings({ ...settings, footerCenter: e.target.value })}
+                        />
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs text-muted-foreground">Right</Label>
-                        <Input className="h-8 text-sm" value={settings.footerRight} onChange={(e) => setSettings({...settings, footerRight: e.target.value})} />
+                        <Input
+                          className="h-8 text-sm"
+                          value={settings.footerRight}
+                          onChange={(e) => setSettings({ ...settings, footerRight: e.target.value })}
+                        />
                       </div>
                     </div>
                   </div>
 
                   <div className="space-y-3">
-                    <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Quick Presets</Label>
+                    <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                      Selective Content Filters
+                    </Label>
+                    <div className="flex flex-wrap gap-4 text-xs">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={settings.includeOutputs ?? true}
+                          onChange={(e) => setSettings({ ...settings, includeOutputs: e.target.checked })}
+                          className="rounded border-slate-300 text-primary focus:ring-primary"
+                        />
+                        <span>Include Output Streams</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={settings.includeErrors ?? true}
+                          onChange={(e) => setSettings({ ...settings, includeErrors: e.target.checked })}
+                          className="rounded border-slate-300 text-primary focus:ring-primary"
+                        />
+                        <span>Include Errors</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={settings.includeImages ?? true}
+                          onChange={(e) => setSettings({ ...settings, includeImages: e.target.checked })}
+                          className="rounded border-slate-300 text-primary focus:ring-primary"
+                        />
+                        <span>Include Charts & Plots</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
+                      Quick Presets
+                    </Label>
                     <div className="flex flex-wrap gap-2">
                       <Button variant="outline" size="sm" onClick={() => handleApplyPreset('academic')} className="text-xs h-8">
                         Academic Format
@@ -315,25 +439,21 @@ export default function Home() {
                         Minimal Format
                       </Button>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Variables available: <code className="text-[10px] bg-muted px-1 py-0.5 rounded">{"{title}"}</code>, <code className="text-[10px] bg-muted px-1 py-0.5 rounded">{"{date}"}</code>, <code className="text-[10px] bg-muted px-1 py-0.5 rounded">{"{page}"}</code>, <code className="text-[10px] bg-muted px-1 py-0.5 rounded">{"{pages}"}</code>
-                    </p>
                   </div>
-
                 </CardContent>
               </Card>
 
               <Card className="border-primary/20 shadow-lg border-2">
                 <CardContent className="p-0">
-                  <div 
-                    {...getRootProps()} 
+                  <div
+                    {...getRootProps()}
                     className={`p-8 md:p-12 text-center cursor-pointer transition-all duration-200 
                       ${isDragActive ? 'bg-primary/5' : 'hover:bg-muted/50'}
                       ${fileName ? 'bg-green-50/50 dark:bg-green-950/20' : ''}
                     `}
                   >
                     <input {...getInputProps()} data-testid="input-file-upload" />
-                    
+
                     {fileName ? (
                       <div className="space-y-4 animate-in zoom-in duration-300">
                         <div className="mx-auto w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center dark:bg-green-900 dark:text-green-300">
@@ -350,27 +470,42 @@ export default function Home() {
                           <Upload className="w-8 h-8" />
                         </div>
                         <div>
-                          <p className="font-semibold text-lg text-slate-800 dark:text-slate-200">Drag & drop your notebook here</p>
-                          <p className="text-sm text-muted-foreground mt-1">or click to browse files (accepts .ipynb only)</p>
+                          <p className="font-semibold text-lg text-slate-800 dark:text-slate-200">
+                            Drag & drop your notebook here
+                          </p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            or click to browse files (accepts .ipynb only)
+                          </p>
                         </div>
                       </div>
                     )}
                   </div>
                 </CardContent>
                 {fileName && (
-                  <CardFooter className="p-4 bg-muted/30 border-t flex justify-end">
-                    <Button 
-                      onClick={(e) => { e.stopPropagation(); handleConvert(); }} 
+                  <CardFooter className="p-4 bg-muted/30 border-t flex flex-wrap justify-between gap-3">
+                    {plotCount > 0 ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setGalleryOpen(true)}
+                        className="gap-1.5 text-xs font-medium"
+                      >
+                        <ImageIcon className="h-4 w-4 text-primary" /> View Plots ({plotCount})
+                      </Button>
+                    ) : (
+                      <div />
+                    )}
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleConvert();
+                      }}
                       disabled={isProcessing}
                       size="lg"
-                      className="w-full sm:w-auto font-semibold gap-2 shadow-sm"
+                      className="font-semibold gap-2 shadow-sm"
                       data-testid="button-convert"
                     >
-                      {isProcessing ? (
-                        <Clock className="w-5 h-5 animate-spin" />
-                      ) : (
-                        <FileOutput className="w-5 h-5" />
-                      )}
+                      {isProcessing ? <Clock className="w-5 h-5 animate-spin" /> : <FileOutput className="w-5 h-5" />}
                       {isProcessing ? 'Converting...' : 'Convert to Word (.docx)'}
                     </Button>
                   </CardFooter>
@@ -388,9 +523,7 @@ export default function Home() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6 flex-1 overflow-y-auto">
-                  {/* Paper mock */}
                   <div className="bg-white dark:bg-slate-950 w-full min-h-[1056px] shadow-sm ring-1 ring-black/5 mx-auto p-8 sm:p-12 relative flex flex-col">
-                    
                     {/* Header Mock */}
                     <div className="flex justify-between items-start text-[11px] text-slate-400 font-serif border-b pb-4 mb-8">
                       <div className="w-1/3 text-left whitespace-pre-wrap">{processZoneText(settings.headerLeft)}</div>
@@ -408,7 +541,10 @@ export default function Home() {
                     {/* Content */}
                     <div className="flex-1 text-slate-800 dark:text-slate-200">
                       {parsedCells.length > 0 ? (
-                        <div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                        <div
+                          className="prose prose-sm dark:prose-invert max-w-none"
+                          dangerouslySetInnerHTML={{ __html: previewHtml }}
+                        />
                       ) : (
                         <div className="flex flex-col items-center justify-center h-64 text-slate-400 space-y-4">
                           <Eye className="w-12 h-12 opacity-20" />
@@ -423,7 +559,6 @@ export default function Home() {
                       <div className="w-1/3 text-center whitespace-pre-wrap">{processZoneText(settings.footerCenter)}</div>
                       <div className="w-1/3 text-right whitespace-pre-wrap">{processZoneText(settings.footerRight)}</div>
                     </div>
-
                   </div>
                 </CardContent>
               </Card>
@@ -431,11 +566,29 @@ export default function Home() {
           </div>
         </TabsContent>
 
+        {/* Tab 2: PDF -> Markdown */}
         <TabsContent value="pdf" className="mt-0 focus-visible:outline-none">
           <PdfToMarkdown />
         </TabsContent>
+
+        {/* Tab 3: Markdown -> Word */}
+        <TabsContent value="markdown" className="mt-0 focus-visible:outline-none">
+          <MarkdownToDocx />
+        </TabsContent>
+
+        {/* Tab 4: Batch Converter */}
+        <TabsContent value="batch" className="mt-0 focus-visible:outline-none">
+          <BatchConverter />
+        </TabsContent>
       </Tabs>
 
+      {/* Plot Gallery Modal */}
+      <PlotsGalleryModal
+        open={galleryOpen}
+        onOpenChange={setGalleryOpen}
+        cells={parsedCells}
+        notebookName={fileName.replace(/\.ipynb$/i, '') || 'notebook'}
+      />
     </div>
   );
 }

@@ -1,12 +1,38 @@
 import { Link, useLocation } from "wouter";
-import { BookText, Github, Linkedin, Mail, Settings, History } from "lucide-react";
-import React from "react";
+import { BookText, Github, Linkedin, Mail, Settings, History, Sun, Moon } from "lucide-react";
+import React, { useEffect, useState } from "react";
 import { ProfileModal } from "@/components/ProfileModal";
 import { HistoryDrawer } from "@/components/HistoryDrawer";
+
 export function Shell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
-  const [profileOpen, setProfileOpen] = React.useState(false);
-  const [drawerOpen, setDrawerOpen] = React.useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+      document.documentElement.classList.add('dark');
+      setIsDark(true);
+    } else {
+      document.documentElement.classList.remove('dark');
+      setIsDark(false);
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    if (isDark) {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+      setIsDark(false);
+    } else {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+      setIsDark(true);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground selection:bg-primary/20">
@@ -16,7 +42,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <BookText className="h-6 w-6 text-primary" />
             <span className="font-semibold text-lg tracking-tight">NotebookForge</span>
           </Link>
-          <nav className="flex items-center gap-6 text-sm font-medium">
+          <nav className="flex items-center gap-4 text-sm font-medium">
             <Link 
               href="/" 
               className={`transition-colors hover:text-primary ${location === '/' ? 'text-primary' : 'text-muted-foreground'}`}
@@ -30,18 +56,28 @@ export function Shell({ children }: { children: React.ReactNode }) {
               About
             </Link>
             <button
-              onClick={() => setDrawerOpen(true)}
-              className="p-1 hover:text-primary transition-colors"
-              aria-label="History"
+              onClick={toggleTheme}
+              className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Toggle theme"
+              title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
             >
-              <History className="h-5 w-5" />
+              {isDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4" />}
+            </button>
+            <button
+              onClick={() => setDrawerOpen(true)}
+              className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="History"
+              title="Conversion History"
+            >
+              <History className="h-4 w-4" />
             </button>
             <button
               onClick={() => setProfileOpen(true)}
-              className="p-1 hover:text-primary transition-colors"
+              className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
               aria-label="Settings"
+              title="Settings"
             >
-              <Settings className="h-5 w-5" />
+              <Settings className="h-4 w-4" />
             </button>
           </nav>
         </div>

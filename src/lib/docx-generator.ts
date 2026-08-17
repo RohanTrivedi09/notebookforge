@@ -20,6 +20,8 @@ import {
 import { saveAs } from 'file-saver';
 import { ParsedCell } from './ipynb-parser';
 
+export type FontTheme = 'academic' | 'modern' | 'classic';
+
 export interface DocSettings {
   title: string;
   headerLeft: string;
@@ -28,6 +30,10 @@ export interface DocSettings {
   footerLeft: string;
   footerCenter: string;
   footerRight: string;
+  fontTheme?: FontTheme;
+  includeOutputs?: boolean;
+  includeErrors?: boolean;
+  includeImages?: boolean;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -465,11 +471,23 @@ const createHeaderFooterTable = (
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export async function generateDocx(
+const getThemeFont = (theme?: FontTheme) => {
+  if (theme === 'academic') return 'Times New Roman';
+  if (theme === 'classic') return 'Georgia';
+  return 'Calibri';
+};
+
+// ── Document Builder ──────────────────────────────────────────────────────────
+
+export async function generateDocxBlob(
   cells: ParsedCell[],
   settings: DocSettings,
-): Promise<void> {
+): Promise<Blob> {
   const docChildren: any[] = [];
+  const docFont = getThemeFont(settings.fontTheme);
+  const includeOutputs = settings.includeOutputs ?? true;
+  const includeErrors = settings.includeErrors ?? true;
+  const includeImages = settings.includeImages ?? true;
 
   // Document Title (rendered in bold black)
   if (settings.title && settings.title.trim()) {
@@ -481,7 +499,7 @@ export async function generateDocx(
             bold: true,
             size: 36, // 18pt
             color: '000000',
-            font: 'Calibri',
+            font: docFont,
           }),
         ],
         spacing: { before: 120, after: 240 },
@@ -539,7 +557,7 @@ export async function generateDocx(
                 bold: true,
                 color: '000000',
                 size: headingSize,
-                font: 'Calibri',
+                font: docFont,
               }),
               spacing: { before: 240, after: 120 },
             }),
@@ -550,7 +568,7 @@ export async function generateDocx(
               children: parseMarkdownLineToRuns(trimmed, {
                 color: '000000',
                 size: 22,
-                font: 'Calibri',
+                font: docFont,
               }),
               spacing: { after: 100 },
             }),
@@ -581,7 +599,7 @@ export async function generateDocx(
 
       // Outputs: Plain text / images / errors
       for (const out of cell.outputs) {
-        if (out.kind === 'stream' || out.kind === 'result') {
+        if ((out.kind === 'stream' || out.kind === 'result') && includeOutputs) {
           const outLines = out.text.split('\n');
           for (const outLine of outLines) {
             if (!outLine && outLines.length > 1) continue;
@@ -599,7 +617,7 @@ export async function generateDocx(
               }),
             );
           }
-        } else if (out.kind === 'image') {
+        } else if (out.kind === 'image' && includeImages) {
           try {
             const raw =
               out.mimeType === 'image/png'
@@ -628,7 +646,7 @@ export async function generateDocx(
           } catch {
             // if image embedding fails, just skip it silently
           }
-        } else if (out.kind === 'error') {
+        } else if (out.kind === 'error' && includeErrors) {
           for (const traceLine of out.traceback) {
             const cleanLine = traceLine.replace(
               /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g,
@@ -680,7 +698,7 @@ export async function generateDocx(
       default: {
         document: {
           run: {
-            font: 'Calibri',
+            font: docFont,
             color: '000000',
           },
         },
@@ -695,8 +713,34 @@ export async function generateDocx(
     ],
   });
 
-  const blob = await Packer.toBlob(doc);
+  return await Packer.toBlob(doc);
+}
+
+export async function generateDocx(
+  cells: ParsedCell[],
+  settings: DocSettings,
+): Promise<void> {
+  const blob = await generateDocxBlob(cells, settings);
   const safeTitle =
     settings.title.trim().replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'notebook';
+  saveAs(blob, `${safeTitle}.docx`);
+}
+
+export async function generateDocxFromMarkdown(
+  markdownText: string,
+  settings: DocSettings,
+  fileName = 'document',
+): Promise<void> {
+  const mockCells: ParsedCell[] = [
+    {
+      type: 'markdown',
+      content: markdownText,
+    },
+  ];
+  const blob = await generateDocxBlob(mockCells, settings);
+  const safeTitle =
+    settings.title.trim().replace(/[^a-z0-9]/gi, '_').toLowerCase() ||
+    fileName.replace(/\.md$/i, '') ||
+    'document';
   saveAs(blob, `${safeTitle}.docx`);
 }
