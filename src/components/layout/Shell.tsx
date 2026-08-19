@@ -35,49 +35,41 @@ export function Shell({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground selection:bg-primary/20">
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 md:px-8 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-            <BookText className="h-6 w-6 text-primary" />
-            <span className="font-semibold text-lg tracking-tight">NotebookForge</span>
+    <div className="min-h-screen flex flex-col bg-[#fbfbfb] dark:bg-[#0f1117] text-foreground selection:bg-primary/10">
+      <header className="sticky top-0 z-50 w-full border-b border-slate-200/80 dark:border-slate-800/80 bg-white/90 dark:bg-slate-900/90 backdrop-blur">
+        <div className="container mx-auto px-6 max-w-7xl h-16 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2.5 hover:opacity-90 transition-opacity">
+            <div className="w-8 h-8 rounded-lg bg-[#001e40] dark:bg-white text-white dark:text-[#001e40] flex items-center justify-center font-serif font-bold text-base shadow-sm">
+              N
+            </div>
+            <span className="font-serif font-semibold text-xl tracking-tight text-slate-900 dark:text-slate-50">
+              Notecraft
+            </span>
           </Link>
-          <nav className="flex items-center gap-4 text-sm font-medium">
-            <Link 
-              href="/" 
-              className={`transition-colors hover:text-primary ${location === '/' ? 'text-primary' : 'text-muted-foreground'}`}
-            >
-              Convert
-            </Link>
-            <Link 
-              href="/about" 
-              className={`transition-colors hover:text-primary ${location === '/about' ? 'text-primary' : 'text-muted-foreground'}`}
-            >
-              About
-            </Link>
+          <nav className="flex items-center gap-3 text-sm font-medium">
             <button
               onClick={toggleTheme}
-              className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
               aria-label="Toggle theme"
               title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
             >
-              {isDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4" />}
+              {isDark ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5" />}
             </button>
             <button
               onClick={() => setDrawerOpen(true)}
-              className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
               aria-label="History"
               title="Conversion History"
             >
-              <History className="h-4 w-4" />
+              <History className="h-5 w-5" />
             </button>
             <button
               onClick={() => setProfileOpen(true)}
-              className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
               aria-label="Settings"
-              title="Settings"
+              title="Settings & Profile"
             >
-              <Settings className="h-4 w-4" />
+              <Settings className="h-5 w-5" />
             </button>
           </nav>
         </div>

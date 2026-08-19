@@ -1,28 +1,29 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { useDropzone } from 'react-dropzone';
 import {
-  Upload,
-  Settings,
-  Eye,
+  CloudUpload,
+  ZoomIn,
+  ZoomOut,
+  Settings2,
   FileOutput,
-  CheckCircle,
+  CheckCircle2,
   Clock,
-  ShieldCheck,
-  Award,
+  Sparkles,
   BookText,
   FileText,
   Files,
   Image as ImageIcon,
-  SlidersHorizontal,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { parseNotebook, ParsedCell } from '@/lib/ipynb-parser';
-import { generateDocx, DocSettings, FontTheme } from '@/lib/docx-generator';
+import { generateDocx, generateDocxFromMarkdown, DocSettings, FontTheme } from '@/lib/docx-generator';
 import { cellsToHtml } from '@/lib/markdown-to-html';
 import PdfToMarkdown from '@/pages/PdfToMarkdown';
 import { MarkdownToDocx } from '@/components/MarkdownToDocx';
@@ -32,6 +33,9 @@ import { addConversionHistory, getSnitchUser } from '@/lib/localStorage';
 
 export default function Home() {
   const { toast } = useToast();
+  const [zoomLevel, setZoomLevel] = useState<number>(100);
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
+
   const [settings, setSettings] = useState<DocSettings>(() => {
     const user = getSnitchUser();
     return {
@@ -50,7 +54,9 @@ export default function Home() {
   });
 
   const [parsedCells, setParsedCells] = useState<ParsedCell[]>([]);
+  const [rawMarkdown, setRawMarkdown] = useState<string>('');
   const [fileName, setFileName] = useState<string>('');
+  const [fileType, setFileType] = useState<'ipynb' | 'markdown' | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
 
@@ -66,34 +72,34 @@ export default function Home() {
     return count;
   }, [parsedCells]);
 
-  const handleApplyPreset = (preset: 'academic' | 'professional' | 'minimal') => {
+  const handleApplyPreset = (preset: 'academic' | 'modern' | 'classic') => {
     const user = getSnitchUser();
-    const studentName = user?.name || 'Student Name';
+    const studentName = user?.name || 'Author Name';
     if (preset === 'academic') {
-      setSettings({
-        ...settings,
+      setSettings((prev) => ({
+        ...prev,
         fontTheme: 'academic',
-        headerLeft: 'Course Code',
+        headerLeft: 'Course Code / Institution',
         headerCenter: '{date}',
-        headerRight: 'Course Name',
+        headerRight: 'Document Title',
         footerLeft: studentName,
         footerCenter: '',
         footerRight: 'Page {page}',
-      });
-    } else if (preset === 'professional') {
-      setSettings({
-        ...settings,
+      }));
+    } else if (preset === 'modern') {
+      setSettings((prev) => ({
+        ...prev,
         fontTheme: 'modern',
-        headerLeft: settings.title ? '{title}' : '',
+        headerLeft: prev.title ? '{title}' : '',
         headerCenter: '',
         headerRight: '{date}',
         footerLeft: 'Confidential',
         footerCenter: '',
         footerRight: 'Page {page} of {pages}',
-      });
-    } else if (preset === 'minimal') {
-      setSettings({
-        ...settings,
+      }));
+    } else if (preset === 'classic') {
+      setSettings((prev) => ({
+        ...prev,
         fontTheme: 'classic',
         headerLeft: '',
         headerCenter: '',
@@ -101,7 +107,7 @@ export default function Home() {
         footerLeft: '',
         footerCenter: 'Page {page}',
         footerRight: '',
-      });
+      }));
     }
   };
 
@@ -110,50 +116,63 @@ export default function Home() {
       const file = acceptedFiles[0];
       if (!file) return;
 
-      if (!file.name.endsWith('.ipynb')) {
-        toast({
-          title: 'Invalid file type',
-          description: 'Please upload a valid Jupyter Notebook (.ipynb) file.',
-          variant: 'destructive',
-        });
-        return;
-      }
-
+      const lower = file.name.toLowerCase();
       setFileName(file.name);
       setIsProcessing(true);
 
       const reader = new FileReader();
-      reader.onload = async (e) => {
-        try {
-          const text = e.target?.result as string;
-          const json = JSON.parse(text);
-          const cells = parseNotebook(json);
-          setParsedCells(cells);
-          toast({
-            title: 'File loaded successfully',
-            description: `Parsed ${cells.length} cells. Ready to convert.`,
-          });
-        } catch (err: any) {
-          toast({
-            title: 'Error parsing notebook',
-            description: err.message || 'The file could not be parsed.',
-            variant: 'destructive',
-          });
-          setFileName('');
-          setParsedCells([]);
-        } finally {
+      if (lower.endsWith('.ipynb')) {
+        setFileType('ipynb');
+        reader.onload = async (e) => {
+          try {
+            const text = e.target?.result as string;
+            const json = JSON.parse(text);
+            const cells = parseNotebook(json);
+            setParsedCells(cells);
+            setRawMarkdown('');
+            toast({
+              title: 'Notebook loaded',
+              description: `Parsed ${cells.length} cells successfully.`,
+            });
+          } catch (err: any) {
+            toast({
+              title: 'Error parsing notebook',
+              description: err.message || 'The file could not be parsed.',
+              variant: 'destructive',
+            });
+            setFileName('');
+            setParsedCells([]);
+          } finally {
+            setIsProcessing(false);
+          }
+        };
+        reader.readAsText(file);
+      } else if (lower.endsWith('.md') || lower.endsWith('.markdown') || lower.endsWith('.txt')) {
+        setFileType('markdown');
+        reader.onload = (e) => {
+          const text = (e.target?.result as string) || '';
+          setRawMarkdown(text);
+          setParsedCells([
+            {
+              type: 'markdown',
+              content: text,
+            },
+          ]);
           setIsProcessing(false);
-        }
-      };
-      reader.onerror = () => {
+          toast({
+            title: 'Markdown file loaded',
+            description: `Loaded ${file.name}`,
+          });
+        };
+        reader.readAsText(file);
+      } else {
         toast({
-          title: 'Error reading file',
-          description: 'An error occurred while reading the file.',
+          title: 'Unsupported format',
+          description: 'Please upload a .ipynb, .md, or .txt file.',
           variant: 'destructive',
         });
         setIsProcessing(false);
-      };
-      reader.readAsText(file);
+      }
     },
     [toast],
   );
@@ -162,15 +181,16 @@ export default function Home() {
     onDrop,
     accept: {
       'application/x-ipynb+json': ['.ipynb'],
+      'text/markdown': ['.md', '.markdown', '.txt'],
     },
     maxFiles: 1,
   });
 
   const handleConvert = async () => {
-    if (parsedCells.length === 0) {
+    if (parsedCells.length === 0 && !rawMarkdown) {
       toast({
-        title: 'No notebook loaded',
-        description: 'Please upload a .ipynb file first.',
+        title: 'No document loaded',
+        description: 'Please upload a Jupyter Notebook or Markdown file first.',
         variant: 'destructive',
       });
       return;
@@ -178,16 +198,22 @@ export default function Home() {
 
     setIsProcessing(true);
     try {
-      await generateDocx(parsedCells, settings);
+      if (fileType === 'markdown' && rawMarkdown) {
+        await generateDocxFromMarkdown(rawMarkdown, settings, fileName);
+      } else {
+        await generateDocx(parsedCells, settings);
+      }
+
       addConversionHistory({
-        filename: fileName || 'notebook.ipynb',
+        filename: fileName || 'notecraft_document',
         timestamp: Date.now(),
         headerConfig: settings.headerLeft || settings.headerCenter || settings.headerRight || '',
         footerConfig: settings.footerLeft || settings.footerCenter || settings.footerRight || '',
       });
+
       toast({
         title: 'Conversion complete!',
-        description: 'Your Word document has been downloaded.',
+        description: 'Your Word document (.docx) has been downloaded.',
       });
     } catch (err: any) {
       toast({
@@ -215,353 +241,362 @@ export default function Home() {
   }, [parsedCells]);
 
   return (
-    <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-16">
-      {/* Hero Section */}
-      <section className="text-center space-y-4 pt-6 pb-2">
-        <div className="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold border-transparent bg-secondary text-secondary-foreground">
-          v2.0 is live — In-browser Jupyter, PDF & Markdown Studio
-        </div>
-        <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-slate-900 dark:text-slate-50 max-w-4xl mx-auto">
-          Convert Jupyter, PDF & Markdown <br className="hidden md:block" /> to Beautiful Word Documents
-        </h1>
-        <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-          Convert .ipynb and .md files to formatted .docx documents natively in your browser. 100% private.
-        </p>
-
-        <div className="flex flex-wrap justify-center gap-6 pt-2">
-          <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-            <Clock className="h-4 w-4 text-primary" />
-            Lightning Fast
-          </div>
-          <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-            <ShieldCheck className="h-4 w-4 text-primary" />
-            100% Local & Private
-          </div>
-          <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-            <Award className="h-4 w-4 text-primary" />
-            Academic & Pro Formats
-          </div>
-        </div>
-      </section>
-
-      {/* Main Multi-tool Tab Navigation */}
-      <Tabs defaultValue="notebook" className="w-full">
-        <div className="flex justify-center mb-8">
-          <TabsList className="grid w-full max-w-2xl grid-cols-2 sm:grid-cols-4 h-12 p-1.5 bg-muted/80 rounded-xl shadow-sm border">
+    <div className="space-y-8 max-w-7xl mx-auto pb-16">
+      {/* Multi-tool Tabs Header */}
+      <Tabs defaultValue="dashboard" className="w-full">
+        <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-4 mb-6">
+          <TabsList className="bg-slate-100 dark:bg-slate-800/60 p-1 rounded-xl h-11">
             <TabsTrigger
-              value="notebook"
-              className="gap-1.5 font-semibold text-xs sm:text-sm rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
+              value="dashboard"
+              className="gap-2 font-medium text-xs sm:text-sm rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
             >
-              <BookText className="h-4 w-4 text-primary" />
-              Jupyter → Word
+              <BookText className="h-4 w-4" />
+              Document Studio
             </TabsTrigger>
             <TabsTrigger
               value="pdf"
-              className="gap-1.5 font-semibold text-xs sm:text-sm rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
+              className="gap-2 font-medium text-xs sm:text-sm rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
             >
-              <FileText className="h-4 w-4 text-primary" />
+              <FileText className="h-4 w-4" />
               PDF → Markdown
             </TabsTrigger>
             <TabsTrigger
               value="markdown"
-              className="gap-1.5 font-semibold text-xs sm:text-sm rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
+              className="gap-2 font-medium text-xs sm:text-sm rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
             >
-              <FileOutput className="h-4 w-4 text-primary" />
-              Markdown → Word
+              <FileOutput className="h-4 w-4" />
+              Markdown Editor
             </TabsTrigger>
             <TabsTrigger
               value="batch"
-              className="gap-1.5 font-semibold text-xs sm:text-sm rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
+              className="gap-2 font-medium text-xs sm:text-sm rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
             >
-              <Files className="h-4 w-4 text-primary" />
+              <Files className="h-4 w-4" />
               Batch Convert
             </TabsTrigger>
           </TabsList>
         </div>
 
-        {/* Tab 1: Jupyter -> Word */}
-        <TabsContent value="notebook" className="mt-0 focus-visible:outline-none space-y-8">
-          <div className="grid lg:grid-cols-2 gap-8 items-start">
-            {/* Left Column: Settings & Upload */}
-            <div className="space-y-6">
-              <Card className="border-primary/10 shadow-md">
-                <CardHeader className="bg-muted/20 border-b">
-                  <CardTitle className="flex items-center gap-2">
-                    <Settings className="h-5 w-5 text-primary" />
-                    Document Settings
-                  </CardTitle>
-                  <CardDescription>Configure layout, presets, and font theme for Word export.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6 pt-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="title">Document Title</Label>
-                    <Input
-                      id="title"
-                      value={settings.title}
-                      onChange={(e) => setSettings({ ...settings, title: e.target.value })}
-                      placeholder="Leave empty to use notebook heading"
-                    />
-                  </div>
+        {/* Tab 1: Notecraft Main Dashboard */}
+        <TabsContent value="dashboard" className="mt-0 focus-visible:outline-none">
+          <div className="grid lg:grid-cols-12 gap-8 items-start">
+            {/* Left Column (5 Cols) - Upload & Presets */}
+            <div className="lg:col-span-5 space-y-6">
+              <div className="space-y-1">
+                <h2 className="font-serif text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">
+                  Document Conversion
+                </h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Upload your source files and apply formatting presets for instant Word documents.
+                </p>
+              </div>
 
-                  <div className="space-y-2">
-                    <Label>Font & Typography Theme</Label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {(['academic', 'modern', 'classic'] as FontTheme[]).map((theme) => (
-                        <Button
-                          key={theme}
-                          type="button"
-                          variant={settings.fontTheme === theme ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => setSettings({ ...settings, fontTheme: theme })}
-                          className="capitalize text-xs font-medium"
-                        >
-                          {theme}
-                        </Button>
-                      ))}
+              {/* Large Drag & Drop Box */}
+              <div
+                {...getRootProps()}
+                className={`p-10 border border-dashed rounded-xl text-center cursor-pointer transition-all duration-200 bg-white dark:bg-slate-900/50 ${
+                  isDragActive
+                    ? 'border-[#001e40] bg-slate-50 dark:bg-slate-800/80 scale-[0.99]'
+                    : 'border-slate-300 dark:border-slate-700 hover:border-[#001e40] hover:bg-slate-50/50 dark:hover:bg-slate-800/30'
+                }`}
+              >
+                <input {...getInputProps()} />
+                <div className="space-y-4">
+                  <div className="mx-auto w-12 h-12 text-slate-400 dark:text-slate-500 flex items-center justify-center">
+                    <CloudUpload className="w-10 h-10 stroke-[1.5]" />
+                  </div>
+                  {fileName ? (
+                    <div className="space-y-1">
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 rounded-full text-xs font-medium">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> File Loaded
+                      </div>
+                      <p className="font-medium text-sm text-slate-900 dark:text-slate-100 truncate max-w-xs mx-auto">
+                        {fileName}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {parsedCells.length} cells parsed • Ready to convert
+                      </p>
                     </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <h4 className="text-sm font-semibold flex items-center gap-2 text-slate-800 dark:text-slate-200">
-                      <div className="w-full h-px bg-border flex-1" />
-                      Header Configuration
-                      <div className="w-full h-px bg-border flex-1" />
-                    </h4>
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">Left</Label>
-                        <Input
-                          className="h-8 text-sm"
-                          value={settings.headerLeft}
-                          onChange={(e) => setSettings({ ...settings, headerLeft: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">Center</Label>
-                        <Input
-                          className="h-8 text-sm"
-                          value={settings.headerCenter}
-                          onChange={(e) => setSettings({ ...settings, headerCenter: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">Right</Label>
-                        <Input
-                          className="h-8 text-sm"
-                          value={settings.headerRight}
-                          onChange={(e) => setSettings({ ...settings, headerRight: e.target.value })}
-                        />
-                      </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                        Drag and drop your Jupyter, PDF, or Markdown files here
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        or click to browse from your computer
+                      </p>
                     </div>
-                  </div>
+                  )}
+                </div>
+              </div>
 
-                  <div className="space-y-4">
-                    <h4 className="text-sm font-semibold flex items-center gap-2 text-slate-800 dark:text-slate-200">
-                      <div className="w-full h-px bg-border flex-1" />
-                      Footer Configuration
-                      <div className="w-full h-px bg-border flex-1" />
-                    </h4>
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">Left</Label>
-                        <Input
-                          className="h-8 text-sm"
-                          value={settings.footerLeft}
-                          onChange={(e) => setSettings({ ...settings, footerLeft: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">Center</Label>
-                        <Input
-                          className="h-8 text-sm"
-                          value={settings.footerCenter}
-                          onChange={(e) => setSettings({ ...settings, footerCenter: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">Right</Label>
-                        <Input
-                          className="h-8 text-sm"
-                          value={settings.footerRight}
-                          onChange={(e) => setSettings({ ...settings, footerRight: e.target.value })}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
-                      Selective Content Filters
-                    </Label>
-                    <div className="flex flex-wrap gap-4 text-xs">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={settings.includeOutputs ?? true}
-                          onChange={(e) => setSettings({ ...settings, includeOutputs: e.target.checked })}
-                          className="rounded border-slate-300 text-primary focus:ring-primary"
-                        />
-                        <span>Include Output Streams</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={settings.includeErrors ?? true}
-                          onChange={(e) => setSettings({ ...settings, includeErrors: e.target.checked })}
-                          className="rounded border-slate-300 text-primary focus:ring-primary"
-                        />
-                        <span>Include Errors</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={settings.includeImages ?? true}
-                          onChange={(e) => setSettings({ ...settings, includeImages: e.target.checked })}
-                          className="rounded border-slate-300 text-primary focus:ring-primary"
-                        />
-                        <span>Include Charts & Plots</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
-                      Quick Presets
-                    </Label>
-                    <div className="flex flex-wrap gap-2">
-                      <Button variant="outline" size="sm" onClick={() => handleApplyPreset('academic')} className="text-xs h-8">
-                        Academic Format
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleApplyPreset('professional')} className="text-xs h-8">
-                        Professional Format
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleApplyPreset('minimal')} className="text-xs h-8">
-                        Minimal Format
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-primary/20 shadow-lg border-2">
-                <CardContent className="p-0">
-                  <div
-                    {...getRootProps()}
-                    className={`p-8 md:p-12 text-center cursor-pointer transition-all duration-200 
-                      ${isDragActive ? 'bg-primary/5' : 'hover:bg-muted/50'}
-                      ${fileName ? 'bg-green-50/50 dark:bg-green-950/20' : ''}
-                    `}
-                  >
-                    <input {...getInputProps()} data-testid="input-file-upload" />
-
-                    {fileName ? (
-                      <div className="space-y-4 animate-in zoom-in duration-300">
-                        <div className="mx-auto w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center dark:bg-green-900 dark:text-green-300">
-                          <CheckCircle className="w-8 h-8" />
-                        </div>
-                        <div>
-                          <p className="font-semibold text-lg text-slate-800 dark:text-slate-200">{fileName}</p>
-                          <p className="text-sm text-muted-foreground">{parsedCells.length} cells parsed successfully</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        <div className="mx-auto w-16 h-16 bg-primary/10 text-primary rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                          <Upload className="w-8 h-8" />
-                        </div>
-                        <div>
-                          <p className="font-semibold text-lg text-slate-800 dark:text-slate-200">
-                            Drag & drop your notebook here
-                          </p>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            or click to browse files (accepts .ipynb only)
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-                {fileName && (
-                  <CardFooter className="p-4 bg-muted/30 border-t flex flex-wrap justify-between gap-3">
-                    {plotCount > 0 ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setGalleryOpen(true)}
-                        className="gap-1.5 text-xs font-medium"
+              {/* Formatting Presets */}
+              <div className="space-y-3 pt-2">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  Formatting Presets
+                </label>
+                <div className="flex flex-wrap gap-2.5">
+                  {(['academic', 'modern', 'classic'] as const).map((preset) => {
+                    const isActive = settings.fontTheme === preset;
+                    return (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => handleApplyPreset(preset)}
+                        className={`px-5 py-2 rounded-full text-xs font-medium transition-all ${
+                          isActive
+                            ? 'bg-[#d5e3ff] text-[#001e40] dark:bg-slate-800 dark:text-slate-100 ring-1 ring-[#001e40] dark:ring-slate-500 font-semibold shadow-xs'
+                            : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-700'
+                        }`}
                       >
-                        <ImageIcon className="h-4 w-4 text-primary" /> View Plots ({plotCount})
-                      </Button>
+                        {preset.charAt(0).toUpperCase() + preset.slice(1)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Action Buttons & Plot Gallery Trigger */}
+              <div className="pt-2 space-y-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    onClick={handleConvert}
+                    disabled={isProcessing}
+                    size="lg"
+                    className="bg-[#001e40] hover:bg-[#002d60] text-white dark:bg-white dark:text-[#001e40] dark:hover:bg-slate-100 font-medium px-8 py-6 rounded-lg text-sm transition-all shadow-sm flex items-center gap-2"
+                  >
+                    {isProcessing ? (
+                      <Clock className="w-4 h-4 animate-spin" />
                     ) : (
-                      <div />
+                      <FileOutput className="w-4 h-4" />
                     )}
+                    {isProcessing ? 'Converting...' : 'Convert to Word'}
+                  </Button>
+
+                  {plotCount > 0 && (
                     <Button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleConvert();
-                      }}
-                      disabled={isProcessing}
+                      variant="outline"
                       size="lg"
-                      className="font-semibold gap-2 shadow-sm"
-                      data-testid="button-convert"
+                      onClick={() => setGalleryOpen(true)}
+                      className="rounded-lg text-xs font-medium gap-1.5 h-12 border-slate-300 dark:border-slate-700"
                     >
-                      {isProcessing ? <Clock className="w-5 h-5 animate-spin" /> : <FileOutput className="w-5 h-5" />}
-                      {isProcessing ? 'Converting...' : 'Convert to Word (.docx)'}
+                      <ImageIcon className="h-4 w-4 text-[#001e40] dark:text-slate-300" />
+                      View Plots ({plotCount})
                     </Button>
-                  </CardFooter>
-                )}
-              </Card>
+                  )}
+                </div>
+
+                {/* Advanced Document Settings Accordion */}
+                <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900/40">
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
+                    className="w-full px-4 py-3 flex items-center justify-between text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Settings2 className="w-4 h-4 text-slate-400" />
+                      Custom Headers, Footers & Filters
+                    </span>
+                    {showAdvancedSettings ? (
+                      <ChevronUp className="w-4 h-4 text-slate-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-slate-400" />
+                    )}
+                  </button>
+
+                  {showAdvancedSettings && (
+                    <div className="p-4 border-t border-slate-200 dark:border-slate-800 space-y-4 text-xs">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="doc-title" className="text-xs">
+                          Document Title Override
+                        </Label>
+                        <Input
+                          id="doc-title"
+                          value={settings.title}
+                          onChange={(e) => setSettings({ ...settings, title: e.target.value })}
+                          placeholder="Leave empty to use main header"
+                          className="h-8 text-xs"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">
+                          Header (Left / Center / Right)
+                        </span>
+                        <div className="grid grid-cols-3 gap-2">
+                          <Input
+                            className="h-8 text-xs"
+                            placeholder="Left"
+                            value={settings.headerLeft}
+                            onChange={(e) => setSettings({ ...settings, headerLeft: e.target.value })}
+                          />
+                          <Input
+                            className="h-8 text-xs"
+                            placeholder="Center"
+                            value={settings.headerCenter}
+                            onChange={(e) => setSettings({ ...settings, headerCenter: e.target.value })}
+                          />
+                          <Input
+                            className="h-8 text-xs"
+                            placeholder="Right"
+                            value={settings.headerRight}
+                            onChange={(e) => setSettings({ ...settings, headerRight: e.target.value })}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">
+                          Footer (Left / Center / Right)
+                        </span>
+                        <div className="grid grid-cols-3 gap-2">
+                          <Input
+                            className="h-8 text-xs"
+                            placeholder="Left"
+                            value={settings.footerLeft}
+                            onChange={(e) => setSettings({ ...settings, footerLeft: e.target.value })}
+                          />
+                          <Input
+                            className="h-8 text-xs"
+                            placeholder="Center"
+                            value={settings.footerCenter}
+                            onChange={(e) => setSettings({ ...settings, footerCenter: e.target.value })}
+                          />
+                          <Input
+                            className="h-8 text-xs"
+                            placeholder="Right"
+                            value={settings.footerRight}
+                            onChange={(e) => setSettings({ ...settings, footerRight: e.target.value })}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-4 pt-1 text-[11px] text-slate-600 dark:text-slate-400">
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={settings.includeOutputs ?? true}
+                            onChange={(e) => setSettings({ ...settings, includeOutputs: e.target.checked })}
+                            className="rounded border-slate-300 text-[#001e40]"
+                          />
+                          <span>Output streams</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={settings.includeErrors ?? true}
+                            onChange={(e) => setSettings({ ...settings, includeErrors: e.target.checked })}
+                            className="rounded border-slate-300 text-[#001e40]"
+                          />
+                          <span>Error traces</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={settings.includeImages ?? true}
+                            onChange={(e) => setSettings({ ...settings, includeImages: e.target.checked })}
+                            className="rounded border-slate-300 text-[#001e40]"
+                          />
+                          <span>Charts & Plots</span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
-            {/* Right Column: Live Preview */}
-            <div className="sticky top-24">
-              <Card className="border-border shadow-sm overflow-hidden h-[800px] flex flex-col bg-[#f8fafc] dark:bg-[#0f172a]">
-                <CardHeader className="bg-white/80 dark:bg-slate-900/80 backdrop-blur border-b py-3 px-4 flex-none">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2 text-slate-600 dark:text-slate-300">
-                    <Eye className="h-4 w-4" />
-                    Live Document Preview
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-6 flex-1 overflow-y-auto">
-                  <div className="bg-white dark:bg-slate-950 w-full min-h-[1056px] shadow-sm ring-1 ring-black/5 mx-auto p-8 sm:p-12 relative flex flex-col">
+            {/* Right Column (7 Cols) - Live Document Preview */}
+            <div className="lg:col-span-7 sticky top-24">
+              <div className="border border-slate-200/80 dark:border-slate-800 rounded-xl overflow-hidden bg-[#eef0f3] dark:bg-[#141822] flex flex-col h-[780px] shadow-sm">
+                {/* Preview Toolbar */}
+                <div className="px-5 py-3 bg-white/70 dark:bg-slate-900/70 backdrop-blur border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
+                  <span className="font-serif text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Live Preview
+                  </span>
+                  <div className="flex items-center gap-2 text-slate-500">
+                    <button
+                      onClick={() => setZoomLevel((z) => Math.max(z - 10, 60))}
+                      className="p-1 rounded hover:bg-slate-200/60 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
+                      title="Zoom Out"
+                    >
+                      <ZoomOut className="w-4 h-4" />
+                    </button>
+                    <span className="text-[11px] font-mono w-10 text-center">{zoomLevel}%</span>
+                    <button
+                      onClick={() => setZoomLevel((z) => Math.min(z + 10, 140))}
+                      className="p-1 rounded hover:bg-slate-200/60 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
+                      title="Zoom In"
+                    >
+                      <ZoomIn className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Document Canvas */}
+                <div className="flex-1 overflow-y-auto p-6 sm:p-8 flex justify-center">
+                  <div
+                    style={{
+                      transform: `scale(${zoomLevel / 100})`,
+                      transformOrigin: 'top center',
+                      transition: 'transform 0.15s ease-out',
+                    }}
+                    className={`bg-white dark:bg-slate-950 w-full max-w-[620px] min-h-[850px] shadow-lg rounded-xs ring-1 ring-black/5 p-10 relative flex flex-col ${
+                      settings.fontTheme === 'academic'
+                        ? 'font-serif'
+                        : settings.fontTheme === 'classic'
+                        ? 'font-serif'
+                        : 'font-sans'
+                    }`}
+                  >
                     {/* Header Mock */}
-                    <div className="flex justify-between items-start text-[11px] text-slate-400 font-serif border-b pb-4 mb-8">
+                    <div className="flex justify-between items-start text-[10px] text-slate-400 border-b border-slate-200/60 pb-3 mb-8">
                       <div className="w-1/3 text-left whitespace-pre-wrap">{processZoneText(settings.headerLeft)}</div>
                       <div className="w-1/3 text-center whitespace-pre-wrap">{processZoneText(settings.headerCenter)}</div>
                       <div className="w-1/3 text-right whitespace-pre-wrap">{processZoneText(settings.headerRight)}</div>
                     </div>
 
                     {/* Title */}
-                    {settings.title && (
-                      <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-50 mb-8 font-sans">
+                    {settings.title ? (
+                      <h1 className="text-2xl font-bold text-slate-950 dark:text-slate-50 mb-6">
                         {settings.title}
                       </h1>
-                    )}
+                    ) : null}
 
-                    {/* Content */}
-                    <div className="flex-1 text-slate-800 dark:text-slate-200">
+                    {/* Document Content */}
+                    <div className="flex-1 text-slate-800 dark:text-slate-200 text-xs leading-relaxed">
                       {parsedCells.length > 0 ? (
                         <div
-                          className="prose prose-sm dark:prose-invert max-w-none"
+                          className="prose prose-xs dark:prose-invert max-w-none"
                           dangerouslySetInnerHTML={{ __html: previewHtml }}
                         />
                       ) : (
-                        <div className="flex flex-col items-center justify-center h-64 text-slate-400 space-y-4">
-                          <Eye className="w-12 h-12 opacity-20" />
-                          <p className="text-sm italic">Document content will appear here once a file is uploaded...</p>
+                        <div className="space-y-6 pt-4">
+                          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
+                            An Exploration of Advanced Methodologies
+                          </h2>
+                          <p className="text-slate-600 dark:text-slate-400 text-xs leading-relaxed">
+                            Upload a Jupyter Notebook (.ipynb) or Markdown file to inspect the live formatted paper preview. Formatting presets will dynamically update typography, borders, and headers in real-time.
+                          </p>
+                          <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 pt-2">
+                            2.1 Literature Review
+                          </h3>
+                          <p className="text-slate-600 dark:text-slate-400 text-xs leading-relaxed">
+                            Code cells, formulas, tables, and charts are rendered with high-fidelity formatting, ready for instantaneous Microsoft Word export.
+                          </p>
                         </div>
                       )}
                     </div>
 
                     {/* Footer Mock */}
-                    <div className="flex justify-between items-end text-[11px] text-slate-400 font-serif border-t pt-4 mt-12">
+                    <div className="flex justify-between items-end text-[10px] text-slate-400 border-t border-slate-200/60 pt-3 mt-10">
                       <div className="w-1/3 text-left whitespace-pre-wrap">{processZoneText(settings.footerLeft)}</div>
                       <div className="w-1/3 text-center whitespace-pre-wrap">{processZoneText(settings.footerCenter)}</div>
                       <div className="w-1/3 text-right whitespace-pre-wrap">{processZoneText(settings.footerRight)}</div>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </div>
           </div>
         </TabsContent>
@@ -587,7 +622,7 @@ export default function Home() {
         open={galleryOpen}
         onOpenChange={setGalleryOpen}
         cells={parsedCells}
-        notebookName={fileName.replace(/\.ipynb$/i, '') || 'notebook'}
+        notebookName={fileName.replace(/\.ipynb$/i, '') || 'notecraft'}
       />
     </div>
   );
