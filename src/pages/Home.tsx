@@ -550,7 +550,7 @@ export default function Home() {
                     }`}
                   >
                     {/* Header Mock */}
-                    <div className="flex justify-between items-start text-[10px] text-slate-400 border-b border-slate-200/60 pb-3 mb-8">
+                    <div className="flex justify-between items-start text-xs font-normal text-slate-800 dark:text-slate-200 border-b border-slate-300/80 dark:border-slate-700 pb-3 mb-8">
                       <div className="w-1/3 text-left whitespace-pre-wrap">{processZoneText(settings.headerLeft)}</div>
                       <div className="w-1/3 text-center whitespace-pre-wrap">{processZoneText(settings.headerCenter)}</div>
                       <div className="w-1/3 text-right whitespace-pre-wrap">{processZoneText(settings.headerRight)}</div>
@@ -589,7 +589,7 @@ export default function Home() {
                     </div>
 
                     {/* Footer Mock */}
-                    <div className="flex justify-between items-end text-[10px] text-slate-400 border-t border-slate-200/60 pt-3 mt-10">
+                    <div className="flex justify-between items-end text-xs font-normal text-slate-800 dark:text-slate-200 border-t border-slate-300/80 dark:border-slate-700 pt-3 mt-10">
                       <div className="w-1/3 text-left whitespace-pre-wrap">{processZoneText(settings.footerLeft)}</div>
                       <div className="w-1/3 text-center whitespace-pre-wrap">{processZoneText(settings.footerCenter)}</div>
                       <div className="w-1/3 text-right whitespace-pre-wrap">{processZoneText(settings.footerRight)}</div>

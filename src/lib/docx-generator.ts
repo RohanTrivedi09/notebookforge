@@ -402,16 +402,16 @@ const createZoneParagraph = (
   while (remaining) {
     const m = remaining.match(/\{(page|pages|date|title)\}/);
     if (!m) {
-      runs.push(new TextRun({ text: remaining, color: '64748b', font: 'Calibri', size: 19 }));
+      runs.push(new TextRun({ text: remaining, color: '000000', font: 'Calibri', size: 20 }));
       break;
     }
     if (m.index! > 0) {
-      runs.push(new TextRun({ text: remaining.substring(0, m.index), color: '64748b', font: 'Calibri', size: 19 }));
+      runs.push(new TextRun({ text: remaining.substring(0, m.index), color: '000000', font: 'Calibri', size: 20 }));
     }
     if (m[1] === 'page') runs.push(PageNumber.CURRENT);
     else if (m[1] === 'pages') runs.push(PageNumber.TOTAL_PAGES);
     else if (m[1] === 'date')
-      runs.push(new TextRun({ text: new Date().toLocaleDateString(), color: '64748b', font: 'Calibri', size: 19 }));
+      runs.push(new TextRun({ text: new Date().toLocaleDateString(), color: '000000', font: 'Calibri', size: 20 }));
     // {title} is replaced before this function is called
     remaining = remaining.substring(m.index! + m[0].length);
   }

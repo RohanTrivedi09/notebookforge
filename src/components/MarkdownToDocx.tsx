@@ -270,7 +270,7 @@ model.compile(optimizer='adam', loss='cross_entropy')
             <CardContent className="p-6 flex-1 overflow-y-auto">
               <div className="bg-white dark:bg-slate-950 w-full min-h-[900px] shadow-sm ring-1 ring-black/5 mx-auto p-8 sm:p-12 relative flex flex-col">
                 {/* Header Mock */}
-                <div className="flex justify-between items-start text-[11px] text-slate-400 font-serif border-b pb-4 mb-6">
+                <div className="flex justify-between items-start text-xs font-normal text-slate-800 dark:text-slate-200 font-serif border-b border-slate-300/80 dark:border-slate-700 pb-3 mb-6">
                   <div className="w-1/3 text-left">{settings.headerLeft}</div>
                   <div className="w-1/3 text-center">{settings.headerCenter}</div>
                   <div className="w-1/3 text-right">{settings.headerRight.replace('{date}', new Date().toLocaleDateString())}</div>
@@ -292,7 +292,7 @@ model.compile(optimizer='adam', loss='cross_entropy')
                 </div>
 
                 {/* Footer Mock */}
-                <div className="flex justify-between items-end text-[11px] text-slate-400 font-serif border-t pt-4 mt-8">
+                <div className="flex justify-between items-end text-xs font-normal text-slate-800 dark:text-slate-200 font-serif border-t border-slate-300/80 dark:border-slate-700 pt-3 mt-8">
                   <div className="w-1/3 text-left">{settings.footerLeft}</div>
                   <div className="w-1/3 text-center">{settings.footerCenter.replace('{page}', '1')}</div>
                   <div className="w-1/3 text-right">{settings.footerRight}</div>
